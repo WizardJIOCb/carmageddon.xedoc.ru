@@ -80,7 +80,10 @@ export class ModelLibrary {
       ...PERSON_SKINS.map(path => this.textureLoader.loadAsync(path)),
     ]);
     this.person = person;
-    this.personAnimations = { idle: idle.animations[0], run: run.animations[0] };
+    this.personAnimations = {
+      idle: idle.animations.find(clip => /idle/i.test(clip.name)) || idle.animations[0],
+      run: run.animations.find(clip => /run/i.test(clip.name)) || run.animations[0],
+    };
     this.textures = skins;
     this.textures.forEach(texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -177,6 +180,8 @@ export class ModelLibrary {
     const mixer = new THREE.AnimationMixer(model);
     const idle = mixer.clipAction(this.personAnimations.idle);
     const run = mixer.clipAction(this.personAnimations.run);
+    idle.time = Math.random() * Math.max(.01, this.personAnimations.idle.duration);
+    run.timeScale = .92 + Math.random() * .2;
     idle.play();
     return { model, mixer, idle, run };
   }

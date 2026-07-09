@@ -34,7 +34,7 @@ const WEAPONS = [
 const COLORS = ['#d5ff18','#ff3c20','#ededdf','#2669ff','#c90045','#161918','#ffb000','#7e33ff'];
 
 const LEVELS = [
-  { id:0, name:'Ржавый район', subtitle:'Промзона / 2 круга', desc:'Бывший сталелитейный квартал. Узкие проезды, бетон и толпа, которой некуда бежать.', reward:2800, enemies:3, peds:20, quota:10, laps:2, sky:0x392f2a, fog:0x241c18, ground:0x2b2925, accent:0xff5128, weather:'DUST', time:'18:40', bg:'radial-gradient(circle at 30% 22%,#b44a20,transparent 26%),linear-gradient(140deg,#25211e,#090a09)' },
+  { id:0, name:'Ржавый район', subtitle:'Промзона / 2 круга', desc:'Бывший сталелитейный квартал. Узкие проезды, бетон и толпа, которой некуда бежать.', reward:2800, enemies:3, peds:20, quota:10, laps:2, sky:0x8fc9e8, fog:0xa8c3d0, ground:0x47463f, accent:0xff6a24, weather:'SUNNY', time:'14:10', bg:'radial-gradient(circle at 30% 22%,#e8a05a,transparent 26%),linear-gradient(140deg,#6f8791,#202b30)' },
   { id:1, name:'Неоновый порт', subtitle:'Док №13 / 3 круга', desc:'Контейнерный терминал под кислотным дождём. Быстрые прямые и слепые повороты.', reward:4500, enemies:4, peds:24, quota:13, laps:3, sky:0x10192e, fog:0x091224, ground:0x151b23, accent:0x27cfff, weather:'RAIN', time:'01:15', bg:'radial-gradient(circle at 70% 20%,#125ea3,transparent 25%),linear-gradient(140deg,#101b29,#07090c)' },
   { id:2, name:'Каньон костей', subtitle:'Пустошь / 2 круга', desc:'Старая трасса через красные скалы. Обрывы, пыльные бури и тяжёлая бронетехника.', reward:6800, enemies:5, peds:26, quota:15, laps:2, sky:0x753d27, fog:0x5b2e20, ground:0x653822, accent:0xffb12b, weather:'SANDSTORM', time:'16:05', bg:'radial-gradient(circle at 50% 15%,#c66b31,transparent 25%),linear-gradient(140deg,#5d3021,#140c09)' },
   { id:3, name:'Мёртвый центр', subtitle:'Megablock / 3 круга', desc:'Разрушенный деловой центр. Перекрёстки, эстакады и охотники на быстрых машинах.', reward:9200, enemies:6, peds:30, quota:18, laps:3, sky:0x252833, fog:0x14161d, ground:0x25282a, accent:0xc43cff, weather:'ASH', time:'06:20', bg:'radial-gradient(circle at 30% 22%,#6d2d83,transparent 25%),linear-gradient(140deg,#29242e,#09090b)' },
@@ -80,7 +80,13 @@ function showMenu() {
   game?.destroy(); game = null;
   app.innerHTML = `
     <section class="screen menu-screen">
-      <div class="menu-art" aria-hidden="true"></div>
+      <div class="menu-demo" aria-hidden="true">
+        <div class="demo-sun"></div><div class="demo-road"></div>
+        <div class="demo-person p1"></div><div class="demo-person p2"></div><div class="demo-person p3"></div><div class="demo-person p4"></div><div class="demo-person p5"></div>
+        <div class="demo-car rammer"><i></i><b></b></div><div class="demo-car interceptor"><i></i><b></b></div><div class="demo-car wreck"><i></i><b></b></div>
+        <div class="demo-blast"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="demo-caption">LIVE FEED // COLLISION DISTRICT</div>
+      </div>
       <main class="menu-column">
         <div class="eyebrow">WRECK INDUSTRIES // ПРЕДСТАВЛЯЕТ</div>
         <h1 class="brand">Wreckrun<span>Aftermath</span></h1>
@@ -179,7 +185,7 @@ async function startGame(levelId){
 class WreckrunGame {
   constructor(level){
     this.level=level; this.clock=new THREE.Clock(); this.keys={}; this.entities=[]; this.opponents=[]; this.pedestrians=[]; this.particles=[]; this.projectiles=[];
-    this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastShot=-10;this.shake=0;this.accumulator=0;
+    this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.burningCars=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastShot=-10;this.shake=0;this.accumulator=0;this.playerDeathPending=false;this.deathModalAt=Infinity;
   }
 
   async init(){
@@ -199,10 +205,10 @@ class WreckrunGame {
   }
 
   setupScene(){
-    this.scene=new THREE.Scene();this.scene.background=new THREE.Color(this.level.sky);this.scene.fog=new THREE.FogExp2(this.level.fog,.0085);
-    const hemi=new THREE.HemisphereLight(this.level.accent,0x17120f,1.6);this.scene.add(hemi);
-    const sun=new THREE.DirectionalLight(0xffe0c0,2.4);sun.position.set(-35,60,-25);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-90;sun.shadow.camera.right=90;sun.shadow.camera.top=90;sun.shadow.camera.bottom=-90;this.scene.add(sun);
-    this.scene.add(new THREE.AmbientLight(0x252a31,.55));
+    const daylight=this.level.id===0;this.scene=new THREE.Scene();this.scene.background=new THREE.Color(this.level.sky);this.scene.fog=new THREE.FogExp2(this.level.fog,daylight?.0042:.0085);
+    const hemi=new THREE.HemisphereLight(daylight?0xcfeaff:this.level.accent,daylight?0x5a4634:0x17120f,daylight?2.15:1.6);this.scene.add(hemi);
+    const sun=new THREE.DirectionalLight(daylight?0xfff1cf:0xffe0c0,daylight?3.6:2.4);sun.position.set(daylight?-48:-35,daylight?78:60,daylight?-36:-25);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-96;sun.shadow.camera.right=96;sun.shadow.camera.top=96;sun.shadow.camera.bottom=-96;sun.shadow.camera.near=1;sun.shadow.camera.far=190;sun.shadow.bias=-.00018;sun.shadow.normalBias=.045;sun.shadow.radius=2;this.scene.add(sun);
+    this.scene.add(new THREE.AmbientLight(daylight?0x71808a:0x252a31,daylight?.72:.55));
   }
 
   setupWorld(){
@@ -211,7 +217,7 @@ class WreckrunGame {
     this.waypoints=[[-55,-38],[0,-54],[55,-38],[66,0],[55,38],[0,54],[-55,38],[-66,0]].map(([x,z])=>new THREE.Vector3(x,0,z));
     this.buildTrack();this.buildCity();
     for(let i=0;i<18;i++){const x=(Math.random()-.5)*115,z=(Math.random()-.5)*80;if(Math.abs(x)<12&&Math.abs(z)<12)continue;this.makeObstacle(x,z);}
-    for(let i=0;i<30;i++){const lamp=new THREE.PointLight(this.level.accent,7,12,2);const a=i/30*Math.PI*2;lamp.position.set(Math.cos(a)*78,2.7,Math.sin(a)*63);this.scene.add(lamp);const pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3),new THREE.MeshStandardMaterial({color:0x161816,metalness:.8}));pole.position.copy(lamp.position);pole.position.y=1.5;this.scene.add(pole);}
+    for(let i=0;i<30;i++)this.makeBreakablePole(i/30*Math.PI*2);
   }
 
   buildTrack(){
@@ -229,15 +235,16 @@ class WreckrunGame {
     for(let i=0;i<46;i++){
       const a=rng()*Math.PI*2,radius=88+rng()*34;
       const building=this.models.createEnvironment(this.level.id,i);
-      building.updateMatrixWorld(true);const initialBounds=new THREE.Box3().setFromObject(building),initialSize=initialBounds.getSize(new THREE.Vector3()),desiredHeight=(this.level.id===0||this.level.id===2?10:15)+rng()*(this.level.id===3?28:18),scale=desiredHeight/Math.max(1,initialSize.y);building.scale.setScalar(scale);building.rotation.y=-a+Math.PI/2+(rng()-.5)*.16;
+      building.updateMatrixWorld(true);const initialBounds=new THREE.Box3().setFromObject(building),initialSize=initialBounds.getSize(new THREE.Vector3()),desiredHeight=(this.level.id===0||this.level.id===2?10:15)+rng()*(this.level.id===3?28:18),scale=desiredHeight/Math.max(1,initialSize.y),yaw=-a+Math.PI/2+(rng()-.5)*.16;building.scale.setScalar(scale);building.updateMatrixWorld(true);const localBounds=new THREE.Box3().setFromObject(building),localSize=localBounds.getSize(new THREE.Vector3()),localCenter=localBounds.getCenter(new THREE.Vector3());building.rotation.y=yaw;
       building.position.set(Math.cos(a)*radius,0,Math.sin(a)*radius);building.updateMatrixWorld(true);
       const bounds=new THREE.Box3().setFromObject(building);building.position.y-=bounds.min.y;
       building.traverse(object=>{if(object.isMesh){object.material.roughness=Math.min(.86,object.material.roughness??.7);if(this.level.id===4)object.material.color?.multiplyScalar(.72);}});
       this.scene.add(building);
+      const rotation={x:0,y:Math.sin(yaw*.5),z:0,w:Math.cos(yaw*.5)},body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(building.position.x,building.position.y,building.position.z).setRotation(rotation)),collider=this.physics.createCollider(RAPIER.ColliderDesc.roundCuboid(Math.max(.6,localSize.x*.47),Math.max(1,localSize.y*.49),Math.max(.6,localSize.z*.47),.08).setTranslation(localCenter.x,localCenter.y,localCenter.z).setFriction(1.12).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(.025),body);collider.userData={type:'building'};
       if(i%5===0){const glow=new THREE.PointLight(this.level.accent,11,18,2);glow.position.set(building.position.x,2.4,building.position.z);this.scene.add(glow);}
     }
     for(let i=0;i<10;i++){
-      const prop=this.models.cloneAsset(i%2?'ind:tank':'ind:chimney'),a=rng()*Math.PI*2,r=76+rng()*8;prop.updateMatrixWorld(true);const original=new THREE.Box3().setFromObject(prop),originalSize=original.getSize(new THREE.Vector3()),targetHeight=i%2?3.5:9;prop.position.set(Math.cos(a)*r,0,Math.sin(a)*r);prop.rotation.y=rng()*Math.PI;prop.scale.setScalar(targetHeight/Math.max(.5,originalSize.y));prop.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(prop);prop.position.y-=b.min.y;this.scene.add(prop);
+      const prop=this.models.cloneAsset(i%2?'ind:tank':'ind:chimney'),a=rng()*Math.PI*2,r=76+rng()*8;prop.updateMatrixWorld(true);const original=new THREE.Box3().setFromObject(prop),originalSize=original.getSize(new THREE.Vector3()),targetHeight=i%2?3.5:9;prop.position.set(Math.cos(a)*r,0,Math.sin(a)*r);prop.rotation.y=rng()*Math.PI;prop.scale.setScalar(targetHeight/Math.max(.5,originalSize.y));prop.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(prop);prop.position.y-=b.min.y;prop.updateMatrixWorld(true);const finalBounds=new THREE.Box3().setFromObject(prop),size=finalBounds.getSize(new THREE.Vector3()),center=finalBounds.getCenter(new THREE.Vector3());this.scene.add(prop);const collider=this.physics.createCollider(RAPIER.ColliderDesc.roundCuboid(Math.max(.25,size.x*.43),Math.max(.3,size.y*.48),Math.max(.25,size.z*.43),.06).setTranslation(center.x,center.y,center.z).setFriction(1.05).setRestitution(.025));collider.userData={type:'industrial'};
     }
   }
 
@@ -254,6 +261,11 @@ class WreckrunGame {
     collider.userData={type:'destructible',obstacle};this.destructibles.push(obstacle);this.colliderDestructibles.set(collider.handle,obstacle);
   }
 
+  makeBreakablePole(a){
+    const x=Math.cos(a)*78,z=Math.sin(a)*63,visual=new THREE.Group(),pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3,10),new THREE.MeshStandardMaterial({color:0x181b1b,metalness:.82,roughness:.35})),cap=new THREE.Mesh(new THREE.SphereGeometry(.2,10,7),new THREE.MeshStandardMaterial({color:this.level.accent,emissive:this.level.accent,emissiveIntensity:1.8})),lamp=new THREE.PointLight(this.level.accent,this.level.id===0?3.5:7,12,2);pole.castShadow=true;cap.castShadow=true;cap.position.y=1.32;lamp.position.y=1.25;visual.add(pole,cap,lamp);visual.position.set(x,1.5,z);this.scene.add(visual);
+    const body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,1.5,z).setLinearDamping(.3).setAngularDamping(.72).setCcdEnabled(true)),mass=34,collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(1.48,.15).setMass(mass).setFriction(1.15).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(.025).setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(1200),body),obstacle={visual,body,collider,type:'pole',size:new THREE.Vector3(.32,3,.32),mass,health:4.5,breakForce:23000,lastImpact:-10,broken:false,pendingBreak:false};collider.userData={type:'destructible',obstacle};this.destructibles.push(obstacle);this.colliderDestructibles.set(collider.handle,obstacle);
+  }
+
   setupActors(){
     const car=currentCar(),up=upgrades();
     const dims=carDimensions(car),start=this.waypoints[0].clone().add(new THREE.Vector3(0,1.05,6));
@@ -266,7 +278,7 @@ class WreckrunGame {
       const base=CARS[(i+this.level.id+1)%CARS.length],aiDims=carDimensions(base),visual=this.models.createCarVisual(base.id,aiColors[i%aiColors.length],aiDims),ai=visual.group,startIndex=(i*2+1)%this.waypoints.length;
       const point=this.waypoints[startIndex],next=this.waypoints[(startIndex+1)%this.waypoints.length],pos=point.clone().add(new THREE.Vector3(0,1.05,0)),yaw=Math.atan2(next.x-point.x,next.z-point.z);this.scene.add(ai);
       const vehicle=createVehicle(this.physics,visual,{...aiDims,position:pos,yaw,mass:900*base.armor,maxSpeed:27+Math.random()*5+this.level.id*1.8,engineForce:5600+this.level.id*480+Math.random()*700});
-      Object.assign(ai.userData,{vehicle,body:visual.body,wheels:visual.wheels,speed:0,health:70+this.level.id*14+base.armor*25,maxHealth:70+this.level.id*14+base.armor*25,maxSpeed:vehicle.maxSpeed,handling:base.handling,target:(startIndex+1)%this.waypoints.length,aggression:.25+Math.random()*.7,dead:false,lastImpact:-10,name:['Crusher','Widow','Butcher','Chrome Jack','Hex','Mortis','Road Wolf','Buzzard'][i]});
+      const tactics=['hunter','ambusher','bully','racer','coward'],tactic=tactics[i%tactics.length];Object.assign(ai.userData,{vehicle,body:visual.body,wheels:visual.wheels,speed:0,health:70+this.level.id*14+base.armor*25,maxHealth:70+this.level.id*14+base.armor*25,maxSpeed:vehicle.maxSpeed,handling:base.handling,target:(startIndex+1)%this.waypoints.length,aggression:.25+Math.random()*.7,tactic,combatState:'race',stateTimer:1+Math.random()*3,ramCooldown:2+Math.random()*4,escapePoint:null,approachSide:i%2?1:-1,stuckTimer:0,recoverTimer:0,dead:false,lastImpact:-10,name:['Crusher','Widow','Butcher','Chrome Jack','Hex','Mortis','Road Wolf','Buzzard'][i]});
       this.colliderVehicles.set(vehicle.collider.handle,ai);this.opponents.push(ai);
     }
     for(let i=0;i<this.level.peds;i++){const ped=this.createPedestrian(i);if(i<4){ped.position.copy(this.waypoints[0]).lerp(this.waypoints[1],.13+i*.075);ped.position.x+=(i%2?1:-1)*2.3;ped.position.y=.05;}else{const a=Math.random()*Math.PI*2,r=20+Math.random()*48;ped.position.set(Math.cos(a)*r,.05,Math.sin(a)*r);}this.scene.add(ped);this.pedestrians.push(ped);}
@@ -277,7 +289,7 @@ class WreckrunGame {
   }
 
   createPedestrian(i){
-    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,phase:Math.random()*10,model:person.model,mixer:person.mixer,idle:person.idle,run:person.run,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
+    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,phase:Math.random()*10,runSpeed:4.4+Math.random()*2.2,swerve:Math.random()<.5?-1:1,model:person.model,mixer:person.mixer,idle:person.idle,run:person.run,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
   }
 
   setupUI(){
@@ -287,12 +299,12 @@ class WreckrunGame {
   }
 
   bindEvents(){
-    this.onKeyDown=e=>{this.keys[e.code]=true;if(e.code==='Escape')this.togglePause();if(e.code==='KeyR')this.resetPlayer();if(e.code==='KeyK'&&new URLSearchParams(location.search).has('debugRagdoll')){const target=this.pedestrians.find(p=>!p.userData.dead);if(target){target.position.copy(this.player.position).add(new THREE.Vector3(0,0,3).applyQuaternion(this.player.quaternion));this.ragdollPedestrian(target);}}};
+    this.onKeyDown=e=>{this.keys[e.code]=true;if(e.code==='Escape')this.togglePause();if(e.code==='KeyR')this.resetPlayer();const debug=new URLSearchParams(location.search).has('debugRagdoll');if(debug&&e.code==='KeyK'){const target=this.pedestrians.find(p=>!p.userData.dead);if(target){target.position.copy(this.player.position).add(new THREE.Vector3(0,0,3).applyQuaternion(this.player.quaternion));this.ragdollPedestrian(target);}}if(debug&&e.code==='KeyL')this.damageCar(this.player,999);if(debug&&e.code==='KeyO'){const target=this.opponents.find(ai=>!ai.userData.dead);if(target)this.damageCar(target,999,this.player);}};
     this.onKeyUp=e=>{this.keys[e.code]=false;};this.onResize=()=>{this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setSize(innerWidth,innerHeight);};
     addEventListener('keydown',this.onKeyDown);addEventListener('keyup',this.onKeyUp);addEventListener('resize',this.onResize);
   }
 
-  animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.syncDestructibles();this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateParticles(dt);this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
+  animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.syncDestructibles();this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateBurningCars(dt);this.updateParticles(dt);if(this.playerDeathPending&&this.elapsed>=this.deathModalAt)this.finish(false,'МАШИНА УНИЧТОЖЕНА');this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
 
   updatePlayer(dt){
     const d=this.player.userData;if(d.dead)return;const forward=this.keys.KeyW||this.keys.ArrowUp,reverse=this.keys.KeyS||this.keys.ArrowDown,left=this.keys.KeyA||this.keys.ArrowLeft,right=this.keys.KeyD||this.keys.ArrowRight;
@@ -305,18 +317,36 @@ class WreckrunGame {
   }
 
   updateAI(dt){
-    for(const ai of this.opponents){const d=ai.userData;if(d.dead)continue;let target=this.waypoints[d.target];
-      if(d.aggression>.72&&ai.position.distanceTo(this.player.position)<25)target=this.player.position;
-      const desired=Math.atan2(target.x-ai.position.x,target.z-ai.position.z),yaw=new THREE.Euler().setFromQuaternion(ai.quaternion,'YXZ').y,diff=angleDelta(yaw,desired);d.speed=d.vehicle.controller.currentVehicleSpeed();
-      const steer=THREE.MathUtils.clamp(diff*1.45,-1,1)*d.handling,brake=Math.abs(diff)>1.15&&Math.abs(d.speed)>10?.45:0;driveVehicle(d.vehicle,{throttle:brake?.28:1,steer,brake,boost:false},dt);
-      if(ai.position.distanceTo(this.waypoints[d.target])<10)d.target=(d.target+1)%this.waypoints.length;
-      if(d.health<d.maxHealth*.4&&Math.random()<dt*4)this.emitSmoke(ai,0x222222,.45);
+    const playerForward=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()),playerSide=new THREE.Vector3(playerForward.z,0,-playerForward.x);
+    for(const ai of this.opponents){const d=ai.userData;if(d.dead)continue;d.speed=d.vehicle.controller.currentVehicleSpeed();d.stateTimer-=dt;d.ramCooldown=Math.max(0,d.ramCooldown-dt);const toPlayer=this.player.position.clone().sub(ai.position).setY(0),distance=toPlayer.length(),health=d.health/d.maxHealth,retreatAt=d.tactic==='coward'?.52:(d.tactic==='racer'?.18:.27);if(health<retreatAt&&d.combatState!=='retreat')this.setAIState(ai,'retreat',4);
+      let target=this.waypoints[d.target].clone(),throttle=1,brake=0,boost=false;
+      if(d.recoverTimer>0){d.recoverTimer-=dt;target=ai.position.clone().sub(forwardVector(d.vehicle.body,new THREE.Vector3()).multiplyScalar(12)).add(new THREE.Vector3(d.approachSide*7,0,0));throttle=-.78;
+      }else{
+        if(Math.abs(d.speed)<.8)d.stuckTimer+=dt;else d.stuckTimer=Math.max(0,d.stuckTimer-dt*2);if(d.stuckTimer>1.15){d.stuckTimer=0;d.recoverTimer=1.05;d.approachSide*=-1;}
+        if(d.combatState==='race'){
+          if(ai.position.distanceTo(this.waypoints[d.target])<10)d.target=(d.target+1)%this.waypoints.length;target=this.waypoints[d.target].clone();const attackRange=d.tactic==='hunter'?42:(d.tactic==='bully'?31:36),wantsFight=d.tactic!=='racer'||d.aggression>.82;if(d.stateTimer<=0){if(wantsFight&&d.ramCooldown<=0&&distance<attackRange&&health>.32)this.setAIState(ai,'stalk',2.2+Math.random()*1.8);else d.stateTimer=1.5+Math.random()*2.5;}
+        }else if(d.combatState==='stalk'){
+          const followDistance=d.tactic==='ambusher'?13:9,lateral=d.tactic==='bully'?5:10;target.copy(this.player.position).addScaledVector(playerForward,-followDistance).addScaledVector(playerSide,d.approachSide*lateral);brake=Math.abs(d.speed)>18&&distance<17?.3:0;if((distance<20&&Math.abs(d.speed)>7)||d.stateTimer<=0)this.setAIState(ai,'charge',2.8+Math.random()*1.3);
+        }else if(d.combatState==='charge'){
+          const lead=THREE.MathUtils.clamp(Math.abs(this.player.userData.speed)*.28,2,9);target.copy(this.player.position).addScaledVector(playerForward,lead).addScaledVector(playerSide,d.tactic==='ambusher'?d.approachSide*2.5:0);boost=d.tactic==='hunter'&&distance>10;if(distance<4.2||d.stateTimer<=0)this.beginAIDisengage(ai,this.player);
+        }else if(d.combatState==='disengage'){
+          target=d.escapePoint?.clone()||this.waypoints[d.target].clone();if(d.stateTimer<=0||ai.position.distanceTo(target)<5)this.setAIState(ai,'race',1+Math.random()*2);
+        }else if(d.combatState==='retreat'){
+          const away=ai.position.clone().sub(this.player.position).setY(0).normalize(),side=new THREE.Vector3(-away.z,0,away.x).multiplyScalar(d.approachSide*13);target.copy(ai.position).addScaledVector(away,38).add(side);boost=distance<20;if(d.stateTimer<=0){d.stateTimer=3;d.approachSide*=-1;}
+        }
+      }
+      const desired=Math.atan2(target.x-ai.position.x,target.z-ai.position.z),yaw=new THREE.Euler().setFromQuaternion(ai.quaternion,'YXZ').y,diff=angleDelta(yaw,desired),steer=THREE.MathUtils.clamp(diff*1.55,-1,1)*d.handling;if(!brake&&Math.abs(diff)>1.18&&Math.abs(d.speed)>11)brake=.42;driveVehicle(d.vehicle,{throttle:brake?.3:throttle,steer,brake,boost},dt);if(d.health<d.maxHealth*.4&&Math.random()<dt*4)this.emitSmoke(ai,0x222222,.45);
     }
   }
 
+  setAIState(ai,state,duration){const d=ai.userData;d.combatState=state;d.stateTimer=duration;if(state==='race'){d.ramCooldown=Math.max(d.ramCooldown,2.5+Math.random()*2.5);d.escapePoint=null;}if(state==='charge')d.approachSide=Math.random()<.5?-1:1;}
+
+  beginAIDisengage(ai,other){if(!ai||ai===this.player||ai.userData.dead)return;const d=ai.userData,away=ai.position.clone().sub(other.position).setY(0);if(away.lengthSq()<.1)away.copy(forwardVector(d.vehicle.body,new THREE.Vector3()).negate());away.normalize();const side=new THREE.Vector3(-away.z,0,away.x).multiplyScalar(d.approachSide*(10+Math.random()*7));d.escapePoint=ai.position.clone().addScaledVector(away,20+Math.random()*12).add(side);d.ramCooldown=4+Math.random()*4;d.combatState='disengage';d.stateTimer=2.2+Math.random()*1.5;d.approachSide*=-1;
+  }
+
   updatePedestrians(dt){
-    for(const p of this.pedestrians){if(p.userData.dead)continue;const dist=p.position.distanceTo(this.player.position),running=dist<19;p.userData.mixer.update(dt);if(running!==p.userData.running){p.userData.running=running;if(running){p.userData.idle.fadeOut(.18);p.userData.run.reset().fadeIn(.18).play();}else{p.userData.run.fadeOut(.3);p.userData.idle.reset().fadeIn(.3).play();}}
-      if(running){const away=p.position.clone().sub(this.player.position).setY(0).normalize();p.position.addScaledVector(away,dt*(dist<8?7.4:4.2));p.rotation.y=Math.atan2(away.x,away.z);}
+    const threats=[this.player,...this.opponents.filter(ai=>!ai.userData.dead)];for(const p of this.pedestrians){if(p.userData.dead)continue;let threat=this.player,dist=Infinity;for(const car of threats){const d=p.position.distanceTo(car.position);if(d<dist){dist=d;threat=car;}}const running=dist<22;p.userData.phase+=dt*(running?8:1);p.userData.mixer.update(dt);if(running!==p.userData.running){p.userData.running=running;if(running){p.userData.idle.fadeOut(.16);p.userData.run.reset().fadeIn(.16).play();}else{p.userData.run.fadeOut(.28);p.userData.idle.reset().fadeIn(.28).play();}}
+      if(running){const away=p.position.clone().sub(threat.position).setY(0).normalize(),side=new THREE.Vector3(-away.z,0,away.x).multiplyScalar(Math.sin(p.userData.phase)*.32*p.userData.swerve),direction=away.add(side).normalize(),speed=p.userData.runSpeed*(dist<7?1.28:1);p.position.addScaledVector(direction,dt*speed);p.rotation.y=Math.atan2(direction.x,direction.z);}else p.rotation.y+=Math.sin(p.userData.phase*.45)*dt*.06;
     }
   }
 
@@ -343,6 +373,7 @@ class WreckrunGame {
       if(force<900)return;
       const direction=new THREE.Vector3(raw.x,raw.y,raw.z);
       if((car1||car2)&&force>2200)this.applyContactGrip(car1,car2,obstacle1,obstacle2,direction,force);
+      if(car1&&car2&&force>6500){this.beginAIDisengage(car1,car2);this.beginAIDisengage(car2,car1);}
       if(obstacle1&&!obstacle1.pendingBreak&&this.damageObstacle(obstacle1,force,car2)){obstacle1.pendingBreak=true;breaks.push({obstacle:obstacle1,direction:direction.clone().negate(),source:car2});}
       if(obstacle2&&!obstacle2.pendingBreak&&this.damageObstacle(obstacle2,force,car1)){obstacle2.pendingBreak=true;breaks.push({obstacle:obstacle2,direction:direction.clone(),source:car1});}
       if(force<15000)return;
@@ -363,22 +394,22 @@ class WreckrunGame {
   damageObstacle(obstacle,force,source){
     if(obstacle.broken||this.elapsed-obstacle.lastImpact<.07)return false;obstacle.lastImpact=this.elapsed;
     const speed=source?Math.abs(source.userData.speed):0,damage=Math.max(.15,(force-1800)/7200)+speed*.018;obstacle.health-=damage;
-    if(force>4200){const p=obstacle.visual.position.clone();if(obstacle.type==='cone')this.sparkBurst(p,Math.min(8,2+Math.round(force/7000)));else for(let i=0;i<4;i++)this.emitParticle(p.clone().add(new THREE.Vector3(0,.4,0)),0x9a5528,.04+Math.random()*.07,.35+Math.random()*.35,new THREE.Vector3((Math.random()-.5)*4,1+Math.random()*3,(Math.random()-.5)*4));}
+    if(force>4200){const p=obstacle.visual.position.clone();if(obstacle.type==='cone'||obstacle.type==='pole')this.sparkBurst(p,Math.min(12,2+Math.round(force/6000)));else for(let i=0;i<4;i++)this.emitParticle(p.clone().add(new THREE.Vector3(0,.4,0)),0x9a5528,.04+Math.random()*.07,.35+Math.random()*.35,new THREE.Vector3((Math.random()-.5)*4,1+Math.random()*3,(Math.random()-.5)*4));}
     return force>=obstacle.breakForce||obstacle.health<=0;
   }
 
   breakObstacle(obstacle,direction,source){
     if(obstacle.broken)return;obstacle.broken=true;
-    const position=obstacle.visual.position.clone(),sourceVelocity=source?.userData.vehicle.body.linvel()||{x:direction.x*8,y:0,z:direction.z*8},count=obstacle.type==='crate'?9:7,palette=obstacle.type==='crate'?[0x5a2d12,0x8d491d,0xc17430]:[0xff6518,0xf1ead4,0x24282b];
+    const position=obstacle.visual.position.clone(),sourceVelocity=source?.userData.vehicle.body.linvel()||{x:direction.x*8,y:0,z:direction.z*8},isPole=obstacle.type==='pole',count=obstacle.type==='crate'?9:(isPole?8:7),palette=obstacle.type==='crate'?[0x5a2d12,0x8d491d,0xc17430]:(isPole?[0x111414,0x343b3b,this.level.accent]:[0xff6518,0xf1ead4,0x24282b]);
     this.colliderDestructibles.delete(obstacle.collider.handle);this.scene.remove(obstacle.visual);this.physics.removeRigidBody(obstacle.body);
     for(let i=0;i<count;i++){
-      const chunkScale=.13+Math.random()*.22,geometry=obstacle.type==='crate'?new THREE.BoxGeometry(chunkScale*(1.2+Math.random()),chunkScale*(.7+Math.random()),chunkScale*(1.1+Math.random())):new THREE.TetrahedronGeometry(chunkScale*(1.1+Math.random()*.8),0),visual=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:palette[i%palette.length],roughness:.78,metalness:obstacle.type==='cone'&&i%3===2?.65:.08}));
+      const chunkScale=.13+Math.random()*.22,geometry=obstacle.type==='crate'?new THREE.BoxGeometry(chunkScale*(1.2+Math.random()),chunkScale*(.7+Math.random()),chunkScale*(1.1+Math.random())):(isPole?new THREE.BoxGeometry(chunkScale*.55,chunkScale*(2.5+Math.random()*3.5),chunkScale*.55):new THREE.TetrahedronGeometry(chunkScale*(1.1+Math.random()*.8),0)),visual=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:palette[i%palette.length],roughness:isPole?.38:.78,metalness:isPole?.82:(obstacle.type==='cone'&&i%3===2?.65:.08)}));
       visual.castShadow=true;visual.position.copy(position).add(new THREE.Vector3((Math.random()-.5)*obstacle.size.x*.65,(Math.random()-.1)*obstacle.size.y*.45,(Math.random()-.5)*obstacle.size.z*.65));this.scene.add(visual);
       const mass=1.1+Math.random()*2.2,body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(visual.position.x,visual.position.y,visual.position.z).setLinearDamping(.16).setAngularDamping(.12).setCcdEnabled(true)),collider=RAPIER.ColliderDesc.ball(chunkScale*.65).setMass(mass).setFriction(1.15).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(.12);this.physics.createCollider(collider,body);
       body.setLinvel({x:sourceVelocity.x*.52+(Math.random()-.5)*7,y:2.5+Math.random()*6,z:sourceVelocity.z*.52+(Math.random()-.5)*7},true);body.applyTorqueImpulse({x:(Math.random()-.5)*8,y:(Math.random()-.5)*8,z:(Math.random()-.5)*8},true);this.physicsDebris.push({visual,body,life:5+Math.random()*3,dispose:true});
     }
-    for(let i=0;i<12;i++)this.emitParticle(position.clone().add(new THREE.Vector3(0,.35,0)),obstacle.type==='crate'?(i%2?0x6e3516:0xb16b31):0x6d6257,.055+Math.random()*.1,.45+Math.random()*.65,new THREE.Vector3((Math.random()-.5)*7,1.5+Math.random()*5,(Math.random()-.5)*7));
-    if(obstacle.type==='cone')this.sparkBurst(position,10);this.shake=Math.max(this.shake,obstacle.type==='crate'?.34:.2);
+    for(let i=0;i<12;i++)this.emitParticle(position.clone().add(new THREE.Vector3(0,.35,0)),obstacle.type==='crate'?(i%2?0x6e3516:0xb16b31):(isPole?0x454b49:0x6d6257),.055+Math.random()*.1,.45+Math.random()*.65,new THREE.Vector3((Math.random()-.5)*7,1.5+Math.random()*5,(Math.random()-.5)*7));
+    if(obstacle.type==='cone'||isPole)this.sparkBurst(position,isPole?18:10);this.shake=Math.max(this.shake,obstacle.type==='crate'?.34:(isPole?.42:.2));
   }
 
   syncDestructibles(){
@@ -401,7 +432,21 @@ class WreckrunGame {
   damageCar(car,amount,source){
     const d=car.userData;if(d.dead)return;d.health-=amount;d.body.traverse(mesh=>{if(mesh.isMesh){const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];materials.forEach(material=>material.roughness=Math.min(.98,(material.roughness??.5)+amount*.003));}});
     if(car===this.player){this.hud.querySelector('.damage-flash').classList.add('on');setTimeout(()=>this.hud?.querySelector('.damage-flash')?.classList.remove('on'),90);}
-    if(d.health<=0){d.dead=true;d.speed=0;for(let i=0;i<4;i++){d.vehicle.controller.setWheelEngineForce(i,0);d.vehicle.controller.setWheelBrake(i,12);}d.vehicle.body.applyTorqueImpulse({x:450,y:80,z:220},true);this.explosion(car.position);if(car===this.player)this.finish(false,'МАШИНА УНИЧТОЖЕНА');else{this.wrecks++;this.addEvent(`<strong>${d.name || 'ПРОТИВНИК'} УНИЧТОЖЕН</strong>`);}}
+    if(d.health<=0)this.destroyCar(car,source);
+  }
+
+  destroyCar(car,source){
+    const d=car.userData;if(d.dead)return;d.dead=true;d.health=0;d.speed=0;for(let i=0;i<4;i++){d.vehicle.controller.setWheelEngineForce(i,0);d.vehicle.controller.setWheelBrake(i,3.5);}d.body.traverse(mesh=>{if(!mesh.isMesh)return;const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];materials.forEach(material=>{material.color?.multiplyScalar(.28);material.roughness=.98;material.metalness=Math.min(.35,material.metalness??.2);});});d.vehicle.body.applyImpulse({x:(Math.random()-.5)*120,y:165,z:(Math.random()-.5)*120},true);d.vehicle.body.applyTorqueImpulse({x:520+(Math.random()-.5)*180,y:(Math.random()-.5)*240,z:330+(Math.random()-.5)*180},true);this.carExplosion(car);
+    if(car===this.player){this.playerDeathPending=true;this.deathModalAt=this.elapsed+3;this.addEvent('<strong>КРИТИЧЕСКОЕ РАЗРУШЕНИЕ!</strong> Реактор нестабилен');}
+    else{this.wrecks++;this.addEvent(`<strong>${d.name || 'ПРОТИВНИК'} ВЗОРВАН</strong>`);}
+  }
+
+  carExplosion(car){
+    const pos=car.position.clone();this.explosion(pos,1.65);for(let i=0;i<6;i++){const direction=new THREE.Vector3((Math.random()-.5)*1.6,.2+Math.random()*.7,(Math.random()-.5)*1.6).normalize();this.spawnDebris(car,direction,12+Math.random()*11);}const light=new THREE.PointLight(0xff4c13,18,14,2);light.position.copy(pos).add(new THREE.Vector3(0,1.1,0));this.scene.add(light);this.burningCars.push({car,life:7.5,emit:0,light});this.shake=1.35;
+  }
+
+  updateBurningCars(dt){
+    for(let i=this.burningCars.length-1;i>=0;i--){const fire=this.burningCars[i];fire.life-=dt;fire.emit-=dt;fire.light.position.copy(fire.car.position).add(new THREE.Vector3(0,.9,0));fire.light.intensity=8+Math.random()*16;if(fire.emit<=0){fire.emit=.045+Math.random()*.055;const pos=fire.car.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.8,.55+Math.random()*.8,(Math.random()-.5)*2.2));this.emitFlame(pos,Math.random()<.45?0xffe24a:0xff4b12,.35+Math.random()*.6,.35+Math.random()*.55,new THREE.Vector3((Math.random()-.5)*1.2,1.4+Math.random()*2,(Math.random()-.5)*1.2));if(Math.random()<.45)this.emitFlame(pos,0x242323,.55+Math.random()*.7,1+Math.random()*1.2,new THREE.Vector3((Math.random()-.5)*.8,1+Math.random()*1.3,(Math.random()-.5)*.8),true);}if(fire.life<=0){this.scene.remove(fire.light);this.burningCars.splice(i,1);}}
   }
 
   fireWeapon(){
@@ -424,17 +469,18 @@ class WreckrunGame {
   checkCheckpoint(){
     if(this.player.position.distanceTo(this.waypoints[this.checkpoint])<10){this.checkpointMeshes[this.checkpoint].material.opacity=.13;this.checkpoint=(this.checkpoint+1)%this.waypoints.length;this.checkpointMeshes[this.checkpoint].material.opacity=.85;if(this.checkpoint===0){this.lap++;this.addEvent(`<strong>КРУГ ${this.lap}/${this.level.laps}</strong>`);}}
   }
-  checkRules(){if(this.lap>=this.level.laps)this.finish(true,'ГОНКА ЗАВЕРШЕНА');else if(this.wrecks>=this.level.enemies)this.finish(true,'ВСЕ СОПЕРНИКИ УНИЧТОЖЕНЫ');else if(this.kills>=this.level.quota)this.finish(true,'КВОТА ВЫПОЛНЕНА');}
+  checkRules(){if(this.playerDeathPending)return;if(this.lap>=this.level.laps)this.finish(true,'ГОНКА ЗАВЕРШЕНА');else if(this.wrecks>=this.level.enemies)this.finish(true,'ВСЕ СОПЕРНИКИ УНИЧТОЖЕНЫ');else if(this.kills>=this.level.quota)this.finish(true,'КВОТА ВЫПОЛНЕНА');}
 
   emitSmoke(car,color=0x333333,size=.4){const pos=car.position.clone().add(new THREE.Vector3((Math.random()-.5),1.1,(Math.random()-.5)));this.emitParticle(pos,color,size,1.4,new THREE.Vector3((Math.random()-.5)*.7,1.5+Math.random(),(Math.random()-.5)*.7));}
   emitExhaust(car,color){const p=car.position.clone().add(new THREE.Vector3(0,.45,-2.2).applyQuaternion(car.quaternion));this.emitParticle(p,color,.18,.35,new THREE.Vector3((Math.random()-.5),.2,-4).applyQuaternion(car.quaternion));}
   emitParticle(pos,color,size,life,vel=new THREE.Vector3(0,1,0)){const m=new THREE.Mesh(new THREE.IcosahedronGeometry(size,0),new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,depthWrite:false}));m.position.copy(pos);m.userData={vel:vel.clone(),life,maxLife:life};this.scene.add(m);this.particles.push(m);}
+  emitFlame(pos,color,size,life,vel=new THREE.Vector3(0,1,0),smoke=false){const material=new THREE.SpriteMaterial({map:getParticleTexture(smoke?'smoke':'fire'),color,transparent:true,opacity:smoke?.68:1,depthWrite:false,blending:smoke?THREE.NormalBlending:THREE.AdditiveBlending}),sprite=new THREE.Sprite(material);sprite.position.copy(pos);sprite.scale.setScalar(size);sprite.userData={vel:vel.clone(),life,maxLife:life,baseOpacity:material.opacity};this.scene.add(sprite);this.particles.push(sprite);}
   sparkBurst(pos,count=12){for(let i=0;i<count;i++)this.emitParticle(pos.clone().add(new THREE.Vector3(0,.5,0)),i%3?0xffb21a:0xffffff,.035+Math.random()*.055,.25+Math.random()*.55,new THREE.Vector3((Math.random()-.5)*12,2+Math.random()*7,(Math.random()-.5)*12));}
   bloodBurst(pos,count=18){for(let i=0;i<count;i++)this.emitParticle(pos.clone().add(new THREE.Vector3(0,1,0)),i%3?0x8d0000:0xe01010,.06+Math.random()*.12,.45+Math.random()*.8,new THREE.Vector3((Math.random()-.5)*10,2+Math.random()*8,(Math.random()-.5)*10));const stain=new THREE.Mesh(new THREE.CircleGeometry(1+Math.random()*1.4,12),new THREE.MeshBasicMaterial({color:0x5b0000,transparent:true,opacity:.8,depthWrite:false}));stain.rotation.x=-Math.PI/2;stain.position.copy(pos);stain.position.y=.055;stain.scale.y=.55;this.scene.add(stain);}
-  explosion(pos){for(let i=0;i<34;i++)this.emitParticle(pos.clone().add(new THREE.Vector3(0,.8,0)),i%4===0?0x222222:(i%2?0xff561d:0xffd22e),.1+Math.random()*.36,.5+Math.random()*1.5,new THREE.Vector3((Math.random()-.5)*15,2+Math.random()*12,(Math.random()-.5)*15));const light=new THREE.PointLight(0xff4317,24,20);light.position.copy(pos).add(new THREE.Vector3(0,2,0));this.scene.add(light);setTimeout(()=>this.scene?.remove(light),180);this.shake=1;}
+  explosion(pos,intensity=1){for(let i=0;i<42*intensity;i++){const direction=new THREE.Vector3((Math.random()-.5)*13,2+Math.random()*11,(Math.random()-.5)*13).multiplyScalar(.75+intensity*.25);this.emitFlame(pos.clone().add(new THREE.Vector3((Math.random()-.5)*1.4,.55+Math.random()*1.2,(Math.random()-.5)*1.4)),i%3?0xff5a16:0xffdc43,.25+Math.random()*.65*intensity,.35+Math.random()*.75,direction);}for(let i=0;i<18*intensity;i++)this.emitFlame(pos.clone().add(new THREE.Vector3((Math.random()-.5)*1.8,.8+Math.random(),(Math.random()-.5)*1.8)),0x2a2928,.55+Math.random()*.9,1.2+Math.random()*1.8,new THREE.Vector3((Math.random()-.5)*3,2+Math.random()*4,(Math.random()-.5)*3),true);this.sparkBurst(pos,Math.round(24*intensity));const ring=new THREE.Mesh(new THREE.RingGeometry(.8,1.05,32),new THREE.MeshBasicMaterial({color:0xff9c35,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));ring.rotation.x=-Math.PI/2;ring.position.copy(pos);ring.position.y=.12;ring.userData={vel:new THREE.Vector3(),life:.55,maxLife:.55,baseOpacity:.8};this.scene.add(ring);this.particles.push(ring);const light=new THREE.PointLight(0xff4317,32*intensity,25*intensity);light.position.copy(pos).add(new THREE.Vector3(0,2,0));this.scene.add(light);setTimeout(()=>this.scene?.remove(light),240);this.shake=Math.max(this.shake,intensity);}
   makeTracer(from,to,color){const geo=new THREE.BufferGeometry().setFromPoints([from,to]);const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity:.9}));this.scene.add(line);setTimeout(()=>this.scene?.remove(line),45);}
   makeLightning(from,to){const pts=[];for(let i=0;i<=8;i++){const p=from.clone().lerp(to,i/8);if(i>0&&i<8)p.add(new THREE.Vector3((Math.random()-.5)*1.2,1+(Math.random()-.5)*1.2,(Math.random()-.5)*1.2));pts.push(p);}const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x8feeff}));this.scene.add(line);setTimeout(()=>this.scene?.remove(line),110);}
-  updateParticles(dt){for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.userData.life-=dt;p.userData.vel.y-=2.5*dt;p.position.addScaledVector(p.userData.vel,dt);p.material.opacity=Math.max(0,p.userData.life/p.userData.maxLife);p.scale.addScalar(dt*.35);if(p.userData.life<=0){this.scene.remove(p);this.particles.splice(i,1);}}}
+  updateParticles(dt){for(let i=this.particles.length-1;i>=0;i--){const p=this.particles[i];p.userData.life-=dt;p.userData.vel.y-=(p.isSprite ? .45 : 2.5)*dt;p.position.addScaledVector(p.userData.vel,dt);p.material.opacity=Math.max(0,p.userData.life/p.userData.maxLife)*(p.userData.baseOpacity??1);p.scale.addScalar(dt*(p.isSprite?1.15:.35));if(p.userData.life<=0){this.scene.remove(p);p.geometry?.dispose();p.material?.dispose();this.particles.splice(i,1);}}}
 
   keepInArena(){}
   resetPlayer(){if(this.ended)return;const nearest=this.waypoints.reduce((best,p,i)=>p.distanceTo(this.player.position)<this.waypoints[best].distanceTo(this.player.position)?i:best,0),point=this.waypoints[nearest],next=this.waypoints[(nearest+1)%this.waypoints.length],yaw=Math.atan2(next.x-point.x,next.z-point.z),body=this.player.userData.vehicle.body;body.setTranslation({x:point.x,y:1.3,z:point.z},true);body.setRotation({x:0,y:Math.sin(yaw/2),z:0,w:Math.cos(yaw/2)},true);body.setLinvel({x:0,y:0,z:0},true);body.setAngvel({x:0,y:0,z:0},true);this.player.userData.speed=0;this.addEvent('Эвакуация: <strong>-5% корпуса</strong>');this.damageCar(this.player,this.player.userData.maxHealth*.05);}
@@ -464,6 +510,10 @@ class WreckrunGame {
 const _v1=new THREE.Vector3();
 const _v2=new THREE.Vector3();
 const _surfaceTextures=new Map();
+const _particleTextures=new Map();
+function getParticleTexture(type){
+  if(_particleTextures.has(type))return _particleTextures.get(type);const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const ctx=canvas.getContext('2d'),gradient=ctx.createRadialGradient(32,32,2,32,32,31);if(type==='fire'){gradient.addColorStop(0,'rgba(255,255,255,1)');gradient.addColorStop(.18,'rgba(255,230,115,.98)');gradient.addColorStop(.52,'rgba(255,105,25,.72)');gradient.addColorStop(1,'rgba(255,35,0,0)');}else{gradient.addColorStop(0,'rgba(255,255,255,.78)');gradient.addColorStop(.45,'rgba(220,220,220,.48)');gradient.addColorStop(1,'rgba(150,150,150,0)');}ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);const texture=new THREE.CanvasTexture(canvas);_particleTextures.set(type,texture);return texture;
+}
 function makeSurfaceTexture(renderer,key,color){
   if(_surfaceTextures.has(key))return _surfaceTextures.get(key);
   const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const ctx=canvas.getContext('2d'),base=new THREE.Color(color),image=ctx.createImageData(256,256);

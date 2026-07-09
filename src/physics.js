@@ -19,8 +19,8 @@ export function createArenaColliders(world) {
   ground.userData = { type: 'ground' };
 
   const walls = [
-    [0, 2, -69, 84, 2, 1], [0, 2, 69, 84, 2, 1],
-    [-84, 2, 0, 1, 2, 69], [84, 2, 0, 1, 2, 69],
+    [0, 3, -129, 130, 3, 1], [0, 3, 129, 130, 3, 1],
+    [-129, 3, 0, 1, 3, 130], [129, 3, 0, 1, 3, 130],
   ];
   walls.forEach(([x, y, z, hx, hy, hz]) => {
     const collider = world.createCollider(
@@ -285,23 +285,27 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   });
 
   const anchorAt = (piece, point) => point.clone().sub(piece.center).applyQuaternion(piece.bodyRotation.clone().invert());
-  const joint = (a, b, boneName) => {
+  const joint = (a, b, boneName, hinge = false) => {
     const pieceA = byName[a], pieceB = byName[b], anchorBone = bones[boneName];
     if (!pieceA || !pieceB || !anchorBone) return;
     const anchor = anchorBone.getWorldPosition(new THREE.Vector3());
-    const instance = world.createImpulseJoint(RAPIER.JointData.spherical(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor)), pieceA.body, pieceB.body, true);
+    const data = hinge
+      ? RAPIER.JointData.revolute(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor), { x: 0, y: 0, z: 1 })
+      : RAPIER.JointData.spherical(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor));
+    const instance = world.createImpulseJoint(data, pieceA.body, pieceB.body, true);
+    if (hinge) instance.setLimits(-.2, 2.35);
     instance.setContactsEnabled(false);
   };
   joint('pelvis', 'torso', 'Spine');
   joint('torso', 'head', 'Head');
   joint('torso', 'upperArmL', 'LeftArm');
-  joint('upperArmL', 'foreArmL', 'LeftForeArm');
+  joint('upperArmL', 'foreArmL', 'LeftForeArm', true);
   joint('torso', 'upperArmR', 'RightArm');
-  joint('upperArmR', 'foreArmR', 'RightForeArm');
+  joint('upperArmR', 'foreArmR', 'RightForeArm', true);
   joint('pelvis', 'thighL', 'LeftUpLeg');
-  joint('thighL', 'shinL', 'LeftLeg');
+  joint('thighL', 'shinL', 'LeftLeg', true);
   joint('pelvis', 'thighR', 'RightUpLeg');
-  joint('thighR', 'shinR', 'RightLeg');
+  joint('thighR', 'shinR', 'RightLeg', true);
 
   pieces.forEach((piece, index) => {
     const scale = piece.mass * .22;
