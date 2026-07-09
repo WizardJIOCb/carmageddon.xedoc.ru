@@ -28,7 +28,8 @@ body::before {
   mix-blend-mode: screen;
 }
 
-#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#game-canvas.camera-dragging { cursor: grabbing; }
 .screen { position: fixed; inset: 0; z-index: 5; }
 .hidden { display: none !important; }
 
@@ -209,7 +210,7 @@ body::before {
 @keyframes eventIn{from{opacity:0;transform:translateX(15px)}}
 
 .pause-modal,.result-modal,.briefing-modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,3,3,.74);backdrop-filter:blur(8px);pointer-events:auto;z-index:20}.modal-card{width:min(520px,90vw);padding:35px;background:#0d0f0e;border:1px solid #3b403c;border-top:3px solid var(--acid);box-shadow:0 30px 80px #000}.modal-card h2{margin:0;font-size:48px;text-transform:uppercase;font-style:italic}.modal-card p{font:12px/1.7 'Share Tech Mono';color:#8d938f}.modal-actions{display:grid;gap:8px;margin-top:25px}.ghost-btn{padding:12px;background:#1a1d1b;border:1px solid #343835;cursor:pointer}.ghost-btn:hover{border-color:white}.result-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:20px 0}.result-stat{padding:12px;background:#171918;text-align:center}.result-stat strong{display:block;color:var(--acid);font:24px 'Share Tech Mono'}.result-stat small{color:#777;font:9px 'Share Tech Mono'}
-.damage-flash{position:absolute;inset:0;background:radial-gradient(circle,transparent 35%,rgba(180,0,0,.72));opacity:0;transition:opacity .08s;pointer-events:none}.damage-flash.on{opacity:1}.boost-lines{position:absolute;inset:0;opacity:0;background:repeating-linear-gradient(98deg,transparent 0 9%,rgba(130,220,255,.12) 9.2%,transparent 9.5% 18%);transition:opacity .2s}.boost-lines.on{opacity:1}
+.damage-flash{position:absolute;inset:0;background:radial-gradient(circle,transparent 35%,rgba(180,0,0,.72));opacity:0;transition:opacity .08s;pointer-events:none}.damage-flash.on{opacity:1}
 .toast{position:fixed;left:50%;top:18%;transform:translate(-50%,-20px);z-index:50;opacity:0;padding:10px 20px;background:var(--acid);color:#080808;font-weight:900;text-transform:uppercase;letter-spacing:.12em;pointer-events:none;transition:.3s}.toast.show{opacity:1;transform:translate(-50%,0)}
 
 @media(max-width:950px){.level-list{grid-template-columns:repeat(2,1fr)}.garage-layout{grid-template-columns:1fr}.car-stage{min-height:420px}.garage-controls{border-left:0}.menu-demo{opacity:.38;width:100vw}.menu-column{width:100%;padding-right:25px}.minimap{display:none}}
