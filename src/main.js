@@ -179,7 +179,7 @@ async function startGame(levelId){
 class WreckrunGame {
   constructor(level){
     this.level=level; this.clock=new THREE.Clock(); this.keys={}; this.entities=[]; this.opponents=[]; this.pedestrians=[]; this.particles=[]; this.projectiles=[];
-    this.ragdolls=[];this.physicsDebris=[];this.colliderVehicles=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastShot=-10;this.shake=0;this.accumulator=0;
+    this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastShot=-10;this.shake=0;this.accumulator=0;
   }
 
   async init(){
@@ -243,10 +243,15 @@ class WreckrunGame {
 
   makeObstacle(x,z){
     const type=Math.random(),wide=type<.55;
-    const mesh=wide?this.models.cloneAsset('prop:box'):this.models.cloneAsset('prop:cone');
-    const scale=wide?.8+Math.random()*1.1:.85+Math.random()*.45;mesh.scale.setScalar(scale);mesh.position.set(x,0,z);mesh.rotation.y=Math.random()*Math.PI;mesh.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(mesh);mesh.position.y-=bounds.min.y;this.scene.add(mesh);
-    const size=bounds.getSize(new THREE.Vector3()).multiplyScalar(scale);
-    this.physics.createCollider(RAPIER.ColliderDesc.roundCuboid(Math.max(.3,size.x*.42),Math.max(.35,size.y*.45),Math.max(.3,size.z*.42),.08).setTranslation(x,Math.max(.35,size.y*.45),z).setFriction(.85).setRestitution(.14));
+    const model=wide?this.models.cloneAsset('prop:box'):this.models.cloneAsset('prop:cone'),scale=wide?.8+Math.random()*1.1:.85+Math.random()*.45,yaw=Math.random()*Math.PI;
+    model.scale.setScalar(scale);model.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());model.position.sub(center);
+    const visual=new THREE.Group();visual.add(model);visual.position.set(x,Math.max(.2,size.y*.5+.025),z);visual.rotation.y=yaw;this.scene.add(visual);
+    const rotation={x:0,y:Math.sin(yaw*.5),z:0,w:Math.cos(yaw*.5)},body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(visual.position.x,visual.position.y,visual.position.z).setRotation(rotation).setLinearDamping(wide?.28:.42).setAngularDamping(wide?.46:.62).setCcdEnabled(true));
+    const halfHeight=Math.max(.18,size.y*.46),radius=Math.max(.18,Math.max(size.x,size.z)*.42),desc=wide?RAPIER.ColliderDesc.roundCuboid(Math.max(.18,size.x*.43),halfHeight,Math.max(.18,size.z*.43),.055):RAPIER.ColliderDesc.cone(halfHeight,radius);
+    const mass=wide?32+scale*18:8+scale*5,collider=this.physics.createCollider(desc.setMass(mass).setFriction(wide?1.05:1.22).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(wide?.055:.08).setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(900),body);
+    const obstacle={visual,body,collider,type:wide?'crate':'cone',size,mass,health:wide?4.5:2,breakForce:wide?26000:10500,lastImpact:-10,broken:false,pendingBreak:false};
+    collider.userData={type:'destructible',obstacle};this.destructibles.push(obstacle);this.colliderDestructibles.set(collider.handle,obstacle);
   }
 
   setupActors(){
@@ -287,7 +292,7 @@ class WreckrunGame {
     addEventListener('keydown',this.onKeyDown);addEventListener('keyup',this.onKeyUp);addEventListener('resize',this.onResize);
   }
 
-  animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateParticles(dt);this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
+  animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.syncDestructibles();this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateParticles(dt);this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
 
   updatePlayer(dt){
     const d=this.player.userData;if(d.dead)return;const forward=this.keys.KeyW||this.keys.ArrowUp,reverse=this.keys.KeyS||this.keys.ArrowDown,left=this.keys.KeyA||this.keys.ArrowLeft,right=this.keys.KeyD||this.keys.ArrowRight;
@@ -329,13 +334,52 @@ class WreckrunGame {
   collideCars(){}
 
   handlePhysicsContacts(){
+    const breaks=[];
     this.eventQueue.drainContactForceEvents(event=>{
-      const h1=event.collider1(),h2=event.collider2(),car1=this.colliderVehicles.get(h1),car2=this.colliderVehicles.get(h2),collider1=this.physics.getCollider(h1),collider2=this.physics.getCollider(h2),force=event.totalForceMagnitude(),raw=event.maxForceDirection();
-      if(force<15000)return;
+      const h1=event.collider1(),h2=event.collider2(),car1=this.colliderVehicles.get(h1),car2=this.colliderVehicles.get(h2),obstacle1=this.colliderDestructibles.get(h1),obstacle2=this.colliderDestructibles.get(h2),collider1=this.physics.getCollider(h1),collider2=this.physics.getCollider(h2),force=event.totalForceMagnitude(),raw=event.maxForceDirection();
+      if(force<900)return;
       const direction=new THREE.Vector3(raw.x,raw.y,raw.z);
+      if((car1||car2)&&force>2200)this.applyContactGrip(car1,car2,obstacle1,obstacle2,direction,force);
+      if(obstacle1&&!obstacle1.pendingBreak&&this.damageObstacle(obstacle1,force,car2)){obstacle1.pendingBreak=true;breaks.push({obstacle:obstacle1,direction:direction.clone().negate(),source:car2});}
+      if(obstacle2&&!obstacle2.pendingBreak&&this.damageObstacle(obstacle2,force,car1)){obstacle2.pendingBreak=true;breaks.push({obstacle:obstacle2,direction:direction.clone(),source:car1});}
+      if(force<15000)return;
       const apply=(car,dir,other,otherCollider)=>{if(!car||car.userData.dead||otherCollider?.userData?.type==='ground')return;if(!other&&force<52000)return;if(this.elapsed-car.userData.lastImpact<.48)return;car.userData.lastImpact=this.elapsed;let amount=THREE.MathUtils.clamp((force-15000)/26000,0,24);if(car!==this.player&&other===this.player&&save.selectedWeapon==='ram')amount*=1.5;if(amount<.7)return;this.damageCar(car,amount,other);this.deformCar(car,dir,amount);this.sparkBurst(car.position,Math.min(28,6+Math.round(amount)));this.shake=Math.max(this.shake,Math.min(.9,amount/26));};
       apply(car1,direction,car2,collider2);apply(car2,direction.clone().negate(),car1,collider1);
     });
+    breaks.forEach(item=>this.breakObstacle(item.obstacle,item.direction,item.source));
+  }
+
+  applyContactGrip(car1,car2,obstacle1,obstacle2,normal,force){
+    const body1=car1?.userData.vehicle.body||obstacle1?.body,body2=car2?.userData.vehicle.body||obstacle2?.body;if(!body1&&!body2)return;
+    const velocity1=body1?.linvel()||{x:0,y:0,z:0},velocity2=body2?.linvel()||{x:0,y:0,z:0},relative=new THREE.Vector3(velocity1.x-velocity2.x,velocity1.y-velocity2.y,velocity1.z-velocity2.z),n=normal.clone().normalize();
+    relative.addScaledVector(n,-relative.dot(n));const tangentSpeed=relative.length();if(tangentSpeed<.35)return;
+    const mass1=body1?body1.mass():Infinity,mass2=body2?body2.mass():Infinity,reduced=Number.isFinite(mass1)&&Number.isFinite(mass2)?mass1*mass2/(mass1+mass2):(Number.isFinite(mass1)?mass1:mass2),grip=Math.min(.085,.025+force/650000),magnitude=Math.min(tangentSpeed*reduced*grip,reduced*2.4),impulse=relative.multiplyScalar(-magnitude/tangentSpeed);
+    if(body1)body1.applyImpulse({x:impulse.x,y:0,z:impulse.z},true);if(body2)body2.applyImpulse({x:-impulse.x,y:0,z:-impulse.z},true);
+  }
+
+  damageObstacle(obstacle,force,source){
+    if(obstacle.broken||this.elapsed-obstacle.lastImpact<.07)return false;obstacle.lastImpact=this.elapsed;
+    const speed=source?Math.abs(source.userData.speed):0,damage=Math.max(.15,(force-1800)/7200)+speed*.018;obstacle.health-=damage;
+    if(force>4200){const p=obstacle.visual.position.clone();if(obstacle.type==='cone')this.sparkBurst(p,Math.min(8,2+Math.round(force/7000)));else for(let i=0;i<4;i++)this.emitParticle(p.clone().add(new THREE.Vector3(0,.4,0)),0x9a5528,.04+Math.random()*.07,.35+Math.random()*.35,new THREE.Vector3((Math.random()-.5)*4,1+Math.random()*3,(Math.random()-.5)*4));}
+    return force>=obstacle.breakForce||obstacle.health<=0;
+  }
+
+  breakObstacle(obstacle,direction,source){
+    if(obstacle.broken)return;obstacle.broken=true;
+    const position=obstacle.visual.position.clone(),sourceVelocity=source?.userData.vehicle.body.linvel()||{x:direction.x*8,y:0,z:direction.z*8},count=obstacle.type==='crate'?9:7,palette=obstacle.type==='crate'?[0x5a2d12,0x8d491d,0xc17430]:[0xff6518,0xf1ead4,0x24282b];
+    this.colliderDestructibles.delete(obstacle.collider.handle);this.scene.remove(obstacle.visual);this.physics.removeRigidBody(obstacle.body);
+    for(let i=0;i<count;i++){
+      const chunkScale=.13+Math.random()*.22,geometry=obstacle.type==='crate'?new THREE.BoxGeometry(chunkScale*(1.2+Math.random()),chunkScale*(.7+Math.random()),chunkScale*(1.1+Math.random())):new THREE.TetrahedronGeometry(chunkScale*(1.1+Math.random()*.8),0),visual=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:palette[i%palette.length],roughness:.78,metalness:obstacle.type==='cone'&&i%3===2?.65:.08}));
+      visual.castShadow=true;visual.position.copy(position).add(new THREE.Vector3((Math.random()-.5)*obstacle.size.x*.65,(Math.random()-.1)*obstacle.size.y*.45,(Math.random()-.5)*obstacle.size.z*.65));this.scene.add(visual);
+      const mass=1.1+Math.random()*2.2,body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(visual.position.x,visual.position.y,visual.position.z).setLinearDamping(.16).setAngularDamping(.12).setCcdEnabled(true)),collider=RAPIER.ColliderDesc.ball(chunkScale*.65).setMass(mass).setFriction(1.15).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(.12);this.physics.createCollider(collider,body);
+      body.setLinvel({x:sourceVelocity.x*.52+(Math.random()-.5)*7,y:2.5+Math.random()*6,z:sourceVelocity.z*.52+(Math.random()-.5)*7},true);body.applyTorqueImpulse({x:(Math.random()-.5)*8,y:(Math.random()-.5)*8,z:(Math.random()-.5)*8},true);this.physicsDebris.push({visual,body,life:5+Math.random()*3,dispose:true});
+    }
+    for(let i=0;i<12;i++)this.emitParticle(position.clone().add(new THREE.Vector3(0,.35,0)),obstacle.type==='crate'?(i%2?0x6e3516:0xb16b31):0x6d6257,.055+Math.random()*.1,.45+Math.random()*.65,new THREE.Vector3((Math.random()-.5)*7,1.5+Math.random()*5,(Math.random()-.5)*7));
+    if(obstacle.type==='cone')this.sparkBurst(position,10);this.shake=Math.max(this.shake,obstacle.type==='crate'?.34:.2);
+  }
+
+  syncDestructibles(){
+    for(const obstacle of this.destructibles){if(obstacle.broken)continue;const p=obstacle.body.translation(),r=obstacle.body.rotation();obstacle.visual.position.set(p.x,p.y,p.z);obstacle.visual.quaternion.set(r.x,r.y,r.z,r.w);}
   }
 
   deformCar(car,worldDirection,amount){
@@ -349,7 +393,7 @@ class WreckrunGame {
     const visual=this.models.createDebris(Math.floor(Math.random()*5));visual.scale.setScalar(.7+Math.random()*.35);visual.position.copy(car.position).add(new THREE.Vector3(0,.7,0));this.scene.add(visual);const body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(visual.position.x,visual.position.y,visual.position.z).setCcdEnabled(true).setLinearDamping(.18));this.physics.createCollider(RAPIER.ColliderDesc.cuboid(.32,.12,.48).setMass(12).setRestitution(.22).setFriction(.7),body);body.applyImpulse({x:direction.x*amount*8+(Math.random()-.5)*30,y:40+amount*4,z:direction.z*amount*8+(Math.random()-.5)*30},true);body.applyTorqueImpulse({x:8,y:13,z:6},true);this.physicsDebris.push({visual,body,life:8});
   }
 
-  syncPhysicsDebris(dt){for(let i=this.physicsDebris.length-1;i>=0;i--){const item=this.physicsDebris[i],p=item.body.translation(),r=item.body.rotation();item.visual.position.set(p.x,p.y,p.z);item.visual.quaternion.set(r.x,r.y,r.z,r.w);item.life-=dt;if(item.life<=0){this.scene.remove(item.visual);this.physics.removeRigidBody(item.body);this.physicsDebris.splice(i,1);}}}
+  syncPhysicsDebris(dt){for(let i=this.physicsDebris.length-1;i>=0;i--){const item=this.physicsDebris[i],p=item.body.translation(),r=item.body.rotation();item.visual.position.set(p.x,p.y,p.z);item.visual.quaternion.set(r.x,r.y,r.z,r.w);item.life-=dt;if(item.life<=0){this.scene.remove(item.visual);this.physics.removeRigidBody(item.body);if(item.dispose){item.visual.geometry?.dispose();item.visual.material?.dispose();}this.physicsDebris.splice(i,1);}}}
 
   damageCar(car,amount,source){
     const d=car.userData;if(d.dead)return;d.health-=amount;d.body.traverse(mesh=>{if(mesh.isMesh){const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];materials.forEach(material=>material.roughness=Math.min(.98,(material.roughness??.5)+amount*.003));}});

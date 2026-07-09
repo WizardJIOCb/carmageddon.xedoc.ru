@@ -13,6 +13,7 @@ export function createArenaColliders(world) {
     RAPIER.ColliderDesc.cuboid(130, .12, 130)
       .setTranslation(0, -.12, 0)
       .setFriction(1.35)
+      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
       .setRestitution(.02),
   );
   ground.userData = { type: 'ground' };
@@ -25,8 +26,9 @@ export function createArenaColliders(world) {
     const collider = world.createCollider(
       RAPIER.ColliderDesc.cuboid(hx, hy, hz)
         .setTranslation(x, y, z)
-        .setFriction(.8)
-        .setRestitution(.08),
+        .setFriction(1.18)
+        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
+        .setRestitution(.035),
     );
     collider.userData = { type: 'barrier' };
   });
@@ -49,8 +51,9 @@ export function createVehicle(world, visual, options) {
   const collider = world.createCollider(
     RAPIER.ColliderDesc.roundCuboid(options.width * .48, options.height * .34, options.length * .47, .1)
       .setTranslation(0, .1, 0)
-      .setFriction(.66)
-      .setRestitution(.06)
+      .setFriction(1.08)
+      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
+      .setRestitution(.035)
       .setMass(options.mass)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
       .setContactForceEventThreshold(1800),
