@@ -47,8 +47,8 @@ export function createVehicle(world, visual, options) {
   body.setEnabledRotations(true, true, true, true);
 
   const collider = world.createCollider(
-    RAPIER.ColliderDesc.roundCuboid(options.width * .48, options.height * .47, options.length * .47, .12)
-      .setTranslation(0, -.04, 0)
+    RAPIER.ColliderDesc.roundCuboid(options.width * .48, options.height * .34, options.length * .47, .1)
+      .setTranslation(0, .1, 0)
       .setFriction(.66)
       .setRestitution(.06)
       .setMass(options.mass)
@@ -62,20 +62,22 @@ export function createVehicle(world, visual, options) {
   controller.setIndexForwardAxis = 2;
   const wheelX = options.width * .47;
   const wheelZ = options.wheelBase;
-  const wheelY = -.16;
+  // Keep the suspension hard-points above the chassis bottom. If these are too low,
+  // the springs collapse to zero travel after the first acceleration and traction dies.
+  const wheelY = .08;
   const wheelPoints = [
     { x: -wheelX, y: wheelY, z: -wheelZ },
     { x:  wheelX, y: wheelY, z: -wheelZ },
     { x: -wheelX, y: wheelY, z:  wheelZ },
     { x:  wheelX, y: wheelY, z:  wheelZ },
   ];
-  wheelPoints.forEach(point => controller.addWheel(point, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, .34, options.wheelRadius));
+  wheelPoints.forEach(point => controller.addWheel(point, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, .38, options.wheelRadius));
   for (let i = 0; i < 4; i++) {
-    controller.setWheelSuspensionStiffness(i, 34);
-    controller.setWheelSuspensionCompression(i, 5.2);
-    controller.setWheelSuspensionRelaxation(i, 6.3);
-    controller.setWheelMaxSuspensionTravel(i, .42);
-    controller.setWheelMaxSuspensionForce(i, options.mass * 10.5);
+    controller.setWheelSuspensionStiffness(i, 46);
+    controller.setWheelSuspensionCompression(i, 6.1);
+    controller.setWheelSuspensionRelaxation(i, 7.2);
+    controller.setWheelMaxSuspensionTravel(i, .5);
+    controller.setWheelMaxSuspensionForce(i, options.mass * 18);
     controller.setWheelFrictionSlip(i, 3.35);
     controller.setWheelSideFrictionStiffness(i, 1.45);
   }
@@ -121,7 +123,7 @@ export function driveVehicle(vehicle, input, dt) {
 
   // Aerodynamic stability: downforce grows with speed without cancelling impacts.
   const downforce = Math.min(22000, speed * speed * 20);
-  body.addForce({ x: 0, y: -downforce, z: 0 }, true);
+  body.applyImpulse({ x: 0, y: -downforce * dt, z: 0 }, true);
 }
 
 export function syncVehicle(vehicle) {
@@ -131,7 +133,7 @@ export function syncVehicle(vehicle) {
   vehicle.visual.group.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
   vehicle.visual.wheels.forEach((pivot, index) => {
     const length = vehicle.controller.wheelSuspensionLength(index);
-    if (length != null) pivot.position.y = pivot.userData.baseY - (length - .34) / (pivot.userData.modelScale || 1);
+    if (length != null) pivot.position.y = pivot.userData.baseY - (length - .38) / (pivot.userData.modelScale || 1);
     pivot.rotation.y = (pivot.userData.baseRotationY || 0) + (index >= 2 ? vehicle.steer : 0);
     const rolling = pivot.userData.rollingMesh;
     if (rolling) rolling.rotation.x = (pivot.userData.baseRollX || 0) + (vehicle.controller.wheelRotation(index) || 0);
