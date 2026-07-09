@@ -278,6 +278,7 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
       bodyRotation,
       boneOffset: start.clone().sub(center).applyQuaternion(inverseBodyRotation),
       boneRotationOffset: inverseBodyRotation.multiply(boneWorldRotation),
+      localPosition: bone.position.clone(),
       localScale: bone.scale.clone(),
       mass: def.mass,
     };
@@ -334,9 +335,9 @@ export function syncRagdoll(ragdoll) {
       const worldRotation = bodyRotation.multiply(piece.boneRotationOffset);
       const parent = piece.bone.parent;
       parent.updateWorldMatrix(true, false);
-      const localPosition = parent.worldToLocal(worldPosition.clone());
       const parentRotation = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
-      piece.bone.position.copy(localPosition);
+      if (piece.name === 'pelvis') piece.bone.position.copy(parent.worldToLocal(worldPosition.clone()));
+      else piece.bone.position.copy(piece.localPosition);
       piece.bone.quaternion.copy(parentRotation.multiply(worldRotation));
       piece.bone.scale.copy(piece.localScale);
       piece.bone.updateMatrixWorld(true);
