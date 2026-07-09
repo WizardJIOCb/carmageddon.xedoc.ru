@@ -55,6 +55,7 @@ export function createVehicle(world, visual, options) {
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
       .setRestitution(.035)
       .setMass(options.mass)
+      .setCollisionGroups(0x00040005)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
       .setContactForceEventThreshold(1800),
     body,
@@ -218,7 +219,7 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   const definitions = [
     { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .135, mass: 2.2 },
     { name: 'torso', bone: 'Spine', end: 'Neck', radius: .16, mass: 4.2 },
-    { name: 'head', bone: 'Head', shape: 'ball', radius: .16, mass: 1 },
+    { name: 'head', bone: 'Head', shape: 'ball', radius: .205, mass: 1 },
     { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .075, mass: .9 },
     { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .064, mass: .65 },
     { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .075, mass: .9 },
@@ -256,8 +257,8 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(center.x, center.y, center.z)
         .setRotation({ x: bodyRotation.x, y: bodyRotation.y, z: bodyRotation.z, w: bodyRotation.w })
-        .setLinearDamping(.18)
-        .setAngularDamping(.58)
+        .setLinearDamping(.34)
+        .setAngularDamping(def.name === 'head' ? 3.8 : 1.65)
         .setCcdEnabled(true),
     );
     world.createCollider(
@@ -285,32 +286,30 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   });
 
   const anchorAt = (piece, point) => point.clone().sub(piece.center).applyQuaternion(piece.bodyRotation.clone().invert());
-  const joint = (a, b, boneName, hinge = false) => {
+  const joint = (a, b, boneName, limits = [-.8, .8], axis = { x: 0, y: 0, z: 1 }) => {
     const pieceA = byName[a], pieceB = byName[b], anchorBone = bones[boneName];
     if (!pieceA || !pieceB || !anchorBone) return;
     const anchor = anchorBone.getWorldPosition(new THREE.Vector3());
-    const data = hinge
-      ? RAPIER.JointData.revolute(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor), { x: 0, y: 0, z: 1 })
-      : RAPIER.JointData.spherical(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor));
+    const data = RAPIER.JointData.revolute(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor), axis);
     const instance = world.createImpulseJoint(data, pieceA.body, pieceB.body, true);
-    if (hinge) instance.setLimits(-.2, 2.35);
+    instance.setLimits(limits[0], limits[1]);
     instance.setContactsEnabled(false);
   };
-  joint('pelvis', 'torso', 'Spine');
-  joint('torso', 'head', 'Head');
-  joint('torso', 'upperArmL', 'LeftArm');
-  joint('upperArmL', 'foreArmL', 'LeftForeArm', true);
-  joint('torso', 'upperArmR', 'RightArm');
-  joint('upperArmR', 'foreArmR', 'RightForeArm', true);
-  joint('pelvis', 'thighL', 'LeftUpLeg');
-  joint('thighL', 'shinL', 'LeftLeg', true);
-  joint('pelvis', 'thighR', 'RightUpLeg');
-  joint('thighR', 'shinR', 'RightLeg', true);
+  joint('pelvis', 'torso', 'Spine', [-.32, .32]);
+  joint('torso', 'head', 'Head', [-.48, .48]);
+  joint('torso', 'upperArmL', 'LeftArm', [-1.15, 1.25]);
+  joint('upperArmL', 'foreArmL', 'LeftForeArm', [-.12, 2.18]);
+  joint('torso', 'upperArmR', 'RightArm', [-1.25, 1.15]);
+  joint('upperArmR', 'foreArmR', 'RightForeArm', [-.12, 2.18]);
+  joint('pelvis', 'thighL', 'LeftUpLeg', [-.55, 1.15]);
+  joint('thighL', 'shinL', 'LeftLeg', [-.08, 2.05]);
+  joint('pelvis', 'thighR', 'RightUpLeg', [-1.15, .55]);
+  joint('thighR', 'shinR', 'RightLeg', [-.08, 2.05]);
 
   pieces.forEach((piece, index) => {
     const scale = piece.mass * .22;
     piece.body.applyImpulse({ x: impulse.x * scale, y: impulse.y * scale, z: impulse.z * scale }, true);
-    piece.body.applyTorqueImpulse({ x: (Math.random() - .5) * (2.4 + index * .08), y: (Math.random() - .5) * 1.8, z: (Math.random() - .5) * (2.4 + index * .08) }, true);
+    piece.body.applyTorqueImpulse({ x: (Math.random() - .5) * (1.1 + index * .04), y: (Math.random() - .5) * .65, z: (Math.random() - .5) * (1.1 + index * .04) }, true);
   });
   return { skinned: true, model, pieces };
 }
@@ -321,6 +320,15 @@ export function syncRagdoll(ragdoll) {
     ragdoll.pieces.forEach(piece => {
       const p = piece.body.translation();
       const r = piece.body.rotation();
+      const angular = piece.body.angvel();
+      const linear = piece.body.linvel();
+      const groundSettling = p.y < .42 && Math.hypot(linear.x, linear.y, linear.z) < 2.2;
+      const maxAngular = groundSettling ? .65 : (piece.name === 'head' ? 2.2 : 5.5);
+      const angularLength = Math.hypot(angular.x, angular.y, angular.z);
+      if (angularLength > maxAngular) {
+        const scale = maxAngular / angularLength;
+        piece.body.setAngvel({ x: angular.x * scale, y: angular.y * scale, z: angular.z * scale }, true);
+      }
       const bodyRotation = new THREE.Quaternion(r.x, r.y, r.z, r.w);
       const worldPosition = piece.boneOffset.clone().applyQuaternion(bodyRotation).add(new THREE.Vector3(p.x, p.y, p.z));
       const worldRotation = bodyRotation.multiply(piece.boneRotationOffset);
