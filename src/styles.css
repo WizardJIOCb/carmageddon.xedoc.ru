@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;0,900;1,700&family=Share+Tech+Mono&display=swap');
+
+:root {
+  color: #f4efe5;
+  background: #050505;
+  font-family: 'Barlow Condensed', Impact, sans-serif;
+  font-synthesis: none;
+  --acid: #d5ff18;
+  --hot: #ff3c20;
+  --steel: #798185;
+  --panel: rgba(11, 12, 12, .91);
+  --line: rgba(213, 255, 24, .24);
+}
+
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button, select, input { font: inherit; }
+button { color: inherit; }
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+  mix-blend-mode: screen;
+}
+
+#game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.screen { position: fixed; inset: 0; z-index: 5; }
+.hidden { display: none !important; }
+
+.menu-screen {
+  display: flex;
+  align-items: stretch;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.96) 0%, rgba(0,0,0,.74) 38%, rgba(0,0,0,.08) 68%),
+    radial-gradient(circle at 75% 54%, rgba(255, 71, 26, .25), transparent 30%),
+    linear-gradient(135deg, #292b29 0 1px, #090909 1px 12px, #121313 12px 13px, #080808 13px 24px);
+}
+
+.menu-art {
+  position: absolute;
+  right: -4vw;
+  bottom: -9vh;
+  width: 68vw;
+  height: 78vh;
+  transform: skewX(-7deg);
+  filter: drop-shadow(0 18px 36px #000);
+}
+
+.menu-art::before {
+  content: '';
+  position: absolute;
+  inset: 23% 8% 10% 15%;
+  border-radius: 46% 43% 17% 18% / 42% 45% 24% 24%;
+  background:
+    linear-gradient(172deg, transparent 0 18%, #d5ff18 19% 22%, transparent 23%),
+    linear-gradient(12deg, #121413, #3b403d 45%, #0d0e0e 46% 72%, #ff3c20 73% 76%, #121313 77%);
+  border: 3px solid #454c48;
+  box-shadow: inset 0 0 0 8px #0c0d0c, inset 0 22px 30px rgba(255,255,255,.1), 0 30px 70px #000;
+  clip-path: polygon(4% 40%, 21% 12%, 72% 4%, 96% 37%, 100% 69%, 89% 84%, 17% 91%, 0 69%);
+}
+
+.menu-art::after {
+  content: '';
+  position: absolute;
+  inset: 45% 42% 25% 31%;
+  border: 13px solid #090a0a;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#666 0 8deg, #202221 8deg 16deg);
+  box-shadow: 26vw 0 0 -1px #111, 26vw 0 0 12px #050505, 0 0 0 6px #2e3330;
+}
+
+.menu-column {
+  position: relative;
+  z-index: 2;
+  width: min(590px, 58vw);
+  padding: clamp(30px, 6vh, 76px) 0 5vh clamp(28px, 6vw, 100px);
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrow { color: var(--acid); letter-spacing: .36em; font-weight: 700; font-size: 12px; }
+.brand { margin: 1.6vh 0 0; font-size: clamp(55px, 8vw, 118px); font-weight: 900; font-style: italic; line-height: .7; letter-spacing: -.055em; text-transform: uppercase; text-shadow: 5px 5px 0 #242724; }
+.brand span { display: block; color: var(--hot); font-size: .51em; letter-spacing: .17em; margin: .42em 0 0 .1em; text-shadow: 3px 3px 0 #351109; }
+.tagline { margin: 3vh 0 5vh; max-width: 390px; color: #989d98; font: 14px/1.6 'Share Tech Mono', monospace; }
+
+.main-nav { display: grid; width: min(390px, 90%); gap: 7px; }
+.nav-btn, .action-btn, .ghost-btn, .buy-btn {
+  border: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  font-weight: 800;
+  transition: transform .16s ease, color .16s ease, background .16s ease, border-color .16s ease;
+}
+.nav-btn {
+  position: relative;
+  padding: 13px 17px 12px 25px;
+  text-align: left;
+  background: linear-gradient(90deg, rgba(48,51,49,.72), rgba(24,25,24,.15));
+  border-left: 3px solid #4d504e;
+  font-size: 18px;
+}
+.nav-btn small { float: right; color: #676b68; font: 10px 'Share Tech Mono'; padding-top: 5px; }
+.nav-btn:hover { transform: translateX(8px); color: #0b0b0b; background: var(--acid); border-left-color: white; }
+.nav-btn:hover small { color: #30330e; }
+.version { margin-top: auto; color: #4d514e; font: 10px 'Share Tech Mono'; letter-spacing: .1em; }
+
+.panel-screen { background: radial-gradient(circle at 50% 30%, rgba(55,61,57,.3), transparent 42%), rgba(3,4,4,.92); backdrop-filter: blur(12px); overflow: auto; }
+.topbar { position: sticky; top: 0; z-index: 10; height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(22px,5vw,70px); border-bottom: 1px solid #303430; background: rgba(7,8,8,.91); }
+.topbar h2 { margin: 0; text-transform: uppercase; font-size: 29px; letter-spacing: .08em; font-style: italic; }
+.topbar h2 span { color: var(--acid); }
+.currency { font: 15px 'Share Tech Mono'; color: #aeb4ad; }
+.currency strong { color: var(--acid); font-size: 21px; }
+.back-btn { background: none; border: 1px solid #343834; padding: 9px 15px; cursor: pointer; color: #9da19d; text-transform: uppercase; letter-spacing: .1em; }
+.back-btn:hover { color: white; border-color: #777; }
+
+.garage-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: minmax(320px, 1.25fr) minmax(360px, .75fr); }
+.car-stage { position: relative; min-height: 610px; overflow: hidden; background: radial-gradient(ellipse at 50% 65%, #303631 0, #151817 24%, #080909 64%); }
+.car-stage::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.7%, rgba(213,255,24,.1) 50%, transparent 50.3%), linear-gradient(0deg, transparent 49.7%, rgba(213,255,24,.07) 50%, transparent 50.3%); background-size: 80px 80px; transform: perspective(600px) rotateX(62deg) translateY(38%); opacity: .5; }
+.car-preview { position: absolute; left: 50%; top: 51%; width: min(570px, 82%); aspect-ratio: 1.9; transform: translate(-50%,-50%) rotate(-4deg); filter: drop-shadow(0 35px 28px #000); }
+.car-preview .body { position: absolute; inset: 26% 5% 18%; background: var(--car-color, #d5ff18); clip-path: polygon(0 55%, 7% 28%, 31% 18%, 43% 0, 72% 3%, 84% 24%, 97% 37%, 100% 71%, 91% 88%, 11% 91%, 1% 74%); border-bottom: 14px solid #161816; box-shadow: inset 0 10px 0 rgba(255,255,255,.16); }
+.car-preview .glass { position: absolute; inset: 24% 34% 53% 36%; background: linear-gradient(145deg,#465458,#101516); clip-path: polygon(20% 6%, 85% 9%, 100% 100%, 0 94%); }
+.car-preview .wheel { position: absolute; top: 60%; width: 21%; aspect-ratio: 1; border-radius: 50%; border: 18px solid #070707; background: repeating-conic-gradient(#999 0 7deg,#292c2a 7deg 15deg); box-shadow: 0 0 0 4px #262a27; }
+.car-preview .wheel.a { left: 12%; }.car-preview .wheel.b { right: 12%; }
+.car-preview .weapon { position: absolute; left: 45%; top: 22%; width: 25%; height: 9%; background: #333936; box-shadow: 14px -6px 0 -3px #777, 24px -6px 0 -3px #777; transform: skewX(-18deg); }
+.stage-label { position: absolute; left: 6%; bottom: 8%; }
+.stage-label h3 { margin: 0; font-size: clamp(35px, 5vw, 70px); font-style: italic; line-height: .8; text-transform: uppercase; }
+.stage-label p { color: #777d78; font: 12px 'Share Tech Mono'; }
+
+.garage-controls { padding: 32px clamp(24px, 4vw, 54px) 60px; background: rgba(10,11,11,.86); border-left: 1px solid #292c2a; }
+.control-section { border-bottom: 1px solid #292c29; padding: 0 0 24px; margin-bottom: 24px; }
+.section-kicker { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; color: #777d77; text-transform: uppercase; font-size: 12px; letter-spacing: .16em; }
+.car-selector { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+.car-choice { padding: 13px 8px; background: #171918; border: 1px solid #2a2e2b; cursor: pointer; text-align: center; color: #858a86; }
+.car-choice strong { display:block; color: #ddd; font-size: 15px; }.car-choice small { font: 9px 'Share Tech Mono'; }
+.car-choice.active { border-color: var(--acid); background: rgba(213,255,24,.08); color: var(--acid); }
+.stat-row { display: grid; grid-template-columns: 84px 1fr 36px; align-items: center; gap: 12px; margin: 10px 0; font: 12px 'Share Tech Mono'; color:#8b918c; }
+.stat-bar { height: 5px; background: #282b29; overflow:hidden; }.stat-bar i { display:block; height:100%; background: linear-gradient(90deg,#768d15,var(--acid)); box-shadow: 0 0 8px var(--acid); }
+.upgrade-row { display:grid; grid-template-columns: 1fr 1fr; gap:7px; }
+.buy-btn { padding: 10px; background:#1c1f1d; border:1px solid #303430; font-size:12px; }.buy-btn:hover:not(:disabled){border-color:var(--acid);color:var(--acid)}.buy-btn:disabled{opacity:.35;cursor:not-allowed}
+.swatches { display:flex; gap:9px; flex-wrap:wrap; }.swatch { width:30px;height:30px;border:2px solid #282b29;cursor:pointer;transform:skewX(-8deg)}.swatch.active{border-color:white;box-shadow:0 0 0 2px var(--acid)}
+.weapon-grid { display:grid; gap:7px; }.weapon-card {display:flex;align-items:center;justify-content:space-between;padding:12px;background:#171918;border:1px solid #2b2e2c;cursor:pointer}.weapon-card.active{border-color:var(--hot);background:rgba(255,60,32,.07)}.weapon-card small{display:block;color:#6e736f;font:10px 'Share Tech Mono'}
+.action-btn { width:100%;padding:14px;background:var(--acid);color:#0a0a0a;clip-path:polygon(2% 0,100% 0,98% 100%,0 100%);font-size:17px}.action-btn:hover{background:white;transform:translateY(-2px)}
+
+.campaign-wrap { padding: 5vh 6vw 8vh; max-width: 1500px; margin:auto; }
+.campaign-intro { max-width:660px; margin-bottom:4vh; }.campaign-intro h3{font-size:clamp(36px,5vw,72px);margin:0;text-transform:uppercase;font-style:italic;line-height:.9}.campaign-intro p{color:#828783;font:13px/1.6 'Share Tech Mono'}
+.level-list { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; align-items:stretch; }
+.level-card { position:relative; min-height:370px;padding:22px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;background:#171918;border:1px solid #303430;cursor:pointer;transition:.2s; }
+.level-card::before {content:'';position:absolute;inset:0;background:var(--level-bg);opacity:.62;transition:.3s}.level-card::after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#090a09 8%,transparent 72%)}
+.level-card>*{position:relative;z-index:1}.level-card:hover:not(.locked){transform:translateY(-8px);border-color:var(--acid)}.level-card.locked{filter:grayscale(1);opacity:.42;cursor:not-allowed}.level-card .num{position:absolute;top:12px;right:18px;color:rgba(255,255,255,.2);font-size:70px;font-weight:900;font-style:italic}.level-card h4{font-size:27px;line-height:.9;margin:0 0 10px;text-transform:uppercase}.level-card p{font:10px/1.5 'Share Tech Mono';color:#8d938e}.level-meta{display:flex;justify-content:space-between;border-top:1px solid #313431;padding-top:10px;margin-top:12px;color:var(--acid);font:9px 'Share Tech Mono'}
+
+.hud { pointer-events:none; color:white; }
+.hud-top { position:absolute; top:24px; left:30px; right:30px; display:flex; justify-content:space-between; align-items:flex-start; }
+.race-objective { padding:12px 15px 10px;background:linear-gradient(90deg,rgba(6,7,7,.9),rgba(6,7,7,.35));border-left:3px solid var(--acid);min-width:270px;clip-path:polygon(0 0,95% 0,100% 100%,0 100%)}
+.race-objective small,.hud-label{display:block;color:#888e89;font:9px 'Share Tech Mono';letter-spacing:.15em;text-transform:uppercase}.race-objective strong{font-size:20px;text-transform:uppercase}.race-objective span{color:var(--acid)}
+.timer{text-align:right;font:34px 'Share Tech Mono';text-shadow:0 2px 5px #000}.timer small{font-size:9px;color:#777;display:block;letter-spacing:.22em}
+.hud-bottom { position:absolute; bottom:25px;left:30px;right:30px;display:flex;align-items:flex-end;justify-content:space-between; }
+.car-vitals {display:grid;grid-template-columns:repeat(3,85px);gap:7px}.vital{background:rgba(7,8,8,.82);padding:9px;border-bottom:2px solid #373b38}.vital strong{display:block;font:20px 'Share Tech Mono';}.vital.health{border-color:var(--hot)}.vital.nitro{border-color:#18d5ff}.vital.weapon{border-color:var(--acid)}
+.speedo { position:relative; width:170px;height:105px;text-align:center;background:radial-gradient(ellipse at 50% 100%,rgba(8,9,9,.96) 0 58%,transparent 60%);padding-top:25px; }.speedo strong{font:48px/1 'Share Tech Mono';letter-spacing:-.08em}.speedo span{font:11px 'Share Tech Mono';color:#777;margin-left:4px}.speedo i{position:absolute;bottom:4px;left:26px;right:26px;height:3px;background:linear-gradient(90deg,var(--acid) var(--speed),#333 var(--speed))}
+.controls-hint{position:absolute;left:50%;bottom:25px;transform:translateX(-50%);font:9px 'Share Tech Mono';color:#6c716d;background:rgba(5,6,6,.7);padding:8px 13px}.controls-hint b{color:#ddd;font-weight:normal}
+.crosshair{position:absolute;left:50%;top:44%;width:22px;height:22px;transform:translate(-50%,-50%);border:1px solid rgba(213,255,24,.5);border-radius:50%}.crosshair::before,.crosshair::after{content:'';position:absolute;background:var(--acid)}.crosshair::before{width:6px;height:1px;left:7px;top:10px}.crosshair::after{width:1px;height:6px;left:10px;top:7px}
+.minimap{position:absolute;right:30px;top:104px;width:150px;height:150px;border:1px solid #3c413d;background:rgba(7,8,8,.76);transform:rotate(45deg);overflow:hidden}.minimap::before{content:'';position:absolute;inset:17%;border:12px solid #383d39}.map-player,.map-enemy{position:absolute;width:6px;height:9px;background:var(--acid);left:50%;top:50%;transform:translate(-50%,-50%)}.map-enemy{width:5px;height:5px;background:var(--hot);border-radius:50%}
+.event-feed{position:absolute;right:30px;top:275px;width:260px;text-align:right}.event{margin:5px 0;padding:5px 8px;background:linear-gradient(90deg,transparent,rgba(5,5,5,.75));font:11px 'Share Tech Mono';animation:eventIn .25s ease}.event strong{color:var(--acid)}
+@keyframes eventIn{from{opacity:0;transform:translateX(15px)}}
+
+.pause-modal,.result-modal,.briefing-modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,3,3,.74);backdrop-filter:blur(8px);pointer-events:auto;z-index:20}.modal-card{width:min(520px,90vw);padding:35px;background:#0d0f0e;border:1px solid #3b403c;border-top:3px solid var(--acid);box-shadow:0 30px 80px #000}.modal-card h2{margin:0;font-size:48px;text-transform:uppercase;font-style:italic}.modal-card p{font:12px/1.7 'Share Tech Mono';color:#8d938f}.modal-actions{display:grid;gap:8px;margin-top:25px}.ghost-btn{padding:12px;background:#1a1d1b;border:1px solid #343835;cursor:pointer}.ghost-btn:hover{border-color:white}.result-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:20px 0}.result-stat{padding:12px;background:#171918;text-align:center}.result-stat strong{display:block;color:var(--acid);font:24px 'Share Tech Mono'}.result-stat small{color:#777;font:9px 'Share Tech Mono'}
+.damage-flash{position:absolute;inset:0;background:radial-gradient(circle,transparent 35%,rgba(180,0,0,.72));opacity:0;transition:opacity .08s;pointer-events:none}.damage-flash.on{opacity:1}.boost-lines{position:absolute;inset:0;opacity:0;background:repeating-linear-gradient(98deg,transparent 0 9%,rgba(130,220,255,.12) 9.2%,transparent 9.5% 18%);transition:opacity .2s}.boost-lines.on{opacity:1}
+.toast{position:fixed;left:50%;top:18%;transform:translate(-50%,-20px);z-index:50;opacity:0;padding:10px 20px;background:var(--acid);color:#080808;font-weight:900;text-transform:uppercase;letter-spacing:.12em;pointer-events:none;transition:.3s}.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media(max-width:950px){.level-list{grid-template-columns:repeat(2,1fr)}.garage-layout{grid-template-columns:1fr}.car-stage{min-height:420px}.garage-controls{border-left:0}.menu-art{opacity:.45}.menu-column{width:100%;padding-right:25px}.minimap{display:none}}
+@media(max-width:600px){.brand{font-size:58px}.menu-column{padding-left:24px}.tagline{margin-bottom:3vh}.level-list{grid-template-columns:1fr}.level-card{min-height:240px}.hud-top{left:12px;right:12px;top:12px}.hud-bottom{left:12px;right:12px;bottom:12px}.car-vitals{grid-template-columns:repeat(3,64px)}.vital{padding:6px}.vital strong{font-size:15px}.controls-hint{display:none}.speedo{width:130px}.event-feed{display:none}}
