@@ -277,7 +277,7 @@ class WreckrunGame {
   }
 
   createPedestrian(i){
-    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,phase:Math.random()*10,mixer:person.mixer,idle:person.idle,run:person.run,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
+    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,phase:Math.random()*10,model:person.model,mixer:person.mixer,idle:person.idle,run:person.run,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
   }
 
   setupUI(){
@@ -287,7 +287,7 @@ class WreckrunGame {
   }
 
   bindEvents(){
-    this.onKeyDown=e=>{this.keys[e.code]=true;if(e.code==='Escape')this.togglePause();if(e.code==='KeyR')this.resetPlayer();};
+    this.onKeyDown=e=>{this.keys[e.code]=true;if(e.code==='Escape')this.togglePause();if(e.code==='KeyR')this.resetPlayer();if(e.code==='KeyK'&&new URLSearchParams(location.search).has('debugRagdoll')){const target=this.pedestrians.find(p=>!p.userData.dead);if(target){target.position.copy(this.player.position).add(new THREE.Vector3(0,0,3).applyQuaternion(this.player.quaternion));this.ragdollPedestrian(target);}}};
     this.onKeyUp=e=>{this.keys[e.code]=false;};this.onResize=()=>{this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setSize(innerWidth,innerHeight);};
     addEventListener('keydown',this.onKeyDown);addEventListener('keyup',this.onKeyUp);addEventListener('resize',this.onResize);
   }
@@ -324,11 +324,14 @@ class WreckrunGame {
 
   hitPedestrians(){
     if(Math.abs(this.player.userData.speed)<4)return;
-    for(const p of this.pedestrians){if(p.userData.dead||p.position.distanceTo(this.player.position)>2.35)continue;p.userData.dead=true;p.visible=false;this.kills++;const f=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()),speed=Math.abs(this.player.userData.speed);
-      const impulse=f.clone().multiplyScalar(4.5+speed*.48);impulse.y=4.8+speed*.11;this.ragdolls.push(createRagdoll(this.physics,this.scene,p.position,impulse,{skin:p.userData.skin,cloth:p.userData.cloth}));
+    for(const p of this.pedestrians){if(p.userData.dead||p.position.distanceTo(this.player.position)>2.35)continue;this.ragdollPedestrian(p);}
+  }
+
+  ragdollPedestrian(p){
+    if(p.userData.dead)return;p.userData.dead=true;this.kills++;const f=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()),speed=Math.max(8,Math.abs(this.player.userData.speed)),model=p.userData.model;p.userData.mixer.stopAllAction();p.updateMatrixWorld(true);model.updateMatrixWorld(true);this.scene.attach(model);p.visible=false;
+      const impulse=f.clone().multiplyScalar(4.5+speed*.48);impulse.y=4.8+speed*.11;this.ragdolls.push(createRagdoll(this.physics,this.scene,p.position,impulse,{skin:p.userData.skin,cloth:p.userData.cloth},model));
       const recoil=f.multiplyScalar(-42);this.player.userData.vehicle.body.applyImpulse({x:recoil.x,y:0,z:recoil.z},true);
       this.bloodBurst(p.position,22);this.addEvent(`<strong>РАЗМАЗАН!</strong> Квота ${this.kills}/${this.level.quota}`);this.shake=.45;
-    }
   }
 
   collideCars(){}

@@ -156,13 +156,22 @@ export class ModelLibrary {
   createPerson(index) {
     const model = SkeletonUtils.clone(this.person);
     const texture = this.textures[index % this.textures.length];
-    model.scale.setScalar(.012);
+    // Kenney's FBX is authored in centimetres. At .012 the character was over
+    // three metres tall and its animated bounds regularly fell outside the
+    // camera frustum. A human scale plus explicit skinned-mesh visibility keeps
+    // the render pass and the shadow pass in agreement.
+    model.scale.setScalar(.0068);
     model.traverse(object => {
       if (!object.isMesh) return;
       object.castShadow = true;
       object.receiveShadow = true;
+      object.frustumCulled = false;
       object.material = object.material.clone();
       object.material.map = texture;
+      object.material.color?.set(0xffffff);
+      object.material.transparent = false;
+      object.material.opacity = 1;
+      object.material.depthWrite = true;
       object.material.needsUpdate = true;
     });
     const mixer = new THREE.AnimationMixer(model);

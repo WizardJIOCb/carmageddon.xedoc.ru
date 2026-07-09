@@ -148,7 +148,8 @@ export function forwardVector(body, target = new THREE.Vector3()) {
   return target.set(0, 0, 1).applyQuaternion(_quat.set(rotation.x, rotation.y, rotation.z, rotation.w));
 }
 
-export function createRagdoll(world, scene, position, impulse, colors) {
+export function createRagdoll(world, scene, position, impulse, colors, model = null) {
+  if (model) return createSkinnedRagdoll(world, scene, model, impulse);
   const skin = new THREE.MeshStandardMaterial({ color: colors.skin, roughness: .72 });
   const cloth = new THREE.MeshStandardMaterial({ color: colors.cloth, roughness: .78 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x1e2225, roughness: .82 });
@@ -208,7 +209,130 @@ export function createRagdoll(world, scene, position, impulse, colors) {
   return pieces;
 }
 
-export function syncRagdoll(pieces) {
+function createSkinnedRagdoll(world, scene, model, impulse) {
+  if (model.parent !== scene) scene.attach(model);
+  model.updateMatrixWorld(true);
+
+  const bones = {};
+  model.traverse(object => { if (object.isBone) bones[object.name] = object; });
+  const definitions = [
+    { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .15, mass: 10 },
+    { name: 'torso', bone: 'Spine', end: 'Neck', radius: .18, mass: 18 },
+    { name: 'head', bone: 'Head', shape: 'ball', radius: .18, mass: 4 },
+    { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .085, mass: 4 },
+    { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .072, mass: 3 },
+    { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .085, mass: 4 },
+    { name: 'foreArmR', bone: 'RightForeArm', end: 'RightHand', radius: .072, mass: 3 },
+    { name: 'thighL', bone: 'LeftUpLeg', end: 'LeftLeg', radius: .12, mass: 8 },
+    { name: 'shinL', bone: 'LeftLeg', end: 'LeftFoot', radius: .095, mass: 6 },
+    { name: 'thighR', bone: 'RightUpLeg', end: 'RightLeg', radius: .12, mass: 8 },
+    { name: 'shinR', bone: 'RightLeg', end: 'RightFoot', radius: .095, mass: 6 },
+  ];
+  const pieces = [];
+  const byName = {};
+  const up = new THREE.Vector3(0, 1, 0);
+
+  definitions.forEach(def => {
+    const bone = bones[def.bone];
+    if (!bone) return;
+    const start = bone.getWorldPosition(new THREE.Vector3());
+    const boneWorldRotation = bone.getWorldQuaternion(new THREE.Quaternion());
+    let center;
+    let bodyRotation;
+    let colliderDesc;
+    if (def.shape === 'ball') {
+      bodyRotation = boneWorldRotation.clone();
+      center = start.clone().add(new THREE.Vector3(0, .11, 0).applyQuaternion(bodyRotation));
+      colliderDesc = RAPIER.ColliderDesc.ball(def.radius);
+    } else {
+      const end = bones[def.end]?.getWorldPosition(new THREE.Vector3()) || start.clone().add(new THREE.Vector3(0, .3, 0));
+      const segment = end.clone().sub(start);
+      const length = Math.max(def.radius * 2.2, segment.length());
+      bodyRotation = new THREE.Quaternion().setFromUnitVectors(up, segment.normalize());
+      center = start.clone().add(end).multiplyScalar(.5);
+      colliderDesc = RAPIER.ColliderDesc.capsule(Math.max(.025, length * .5 - def.radius), def.radius);
+    }
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(center.x, center.y, center.z)
+        .setRotation({ x: bodyRotation.x, y: bodyRotation.y, z: bodyRotation.z, w: bodyRotation.w })
+        .setLinearDamping(.18)
+        .setAngularDamping(.58)
+        .setCcdEnabled(true),
+    );
+    world.createCollider(
+      colliderDesc
+        .setMass(def.mass)
+        .setFriction(.82)
+        .setRestitution(.035)
+        .setCollisionGroups(0x00020001),
+      body,
+    );
+    const inverseBodyRotation = bodyRotation.clone().invert();
+    const piece = {
+      name: def.name,
+      body,
+      bone,
+      center,
+      bodyRotation,
+      boneOffset: start.clone().sub(center).applyQuaternion(inverseBodyRotation),
+      boneRotationOffset: inverseBodyRotation.multiply(boneWorldRotation),
+      localScale: bone.scale.clone(),
+      mass: def.mass,
+    };
+    pieces.push(piece);
+    byName[def.name] = piece;
+  });
+
+  const anchorAt = (piece, point) => point.clone().sub(piece.center).applyQuaternion(piece.bodyRotation.clone().invert());
+  const joint = (a, b, boneName) => {
+    const pieceA = byName[a], pieceB = byName[b], anchorBone = bones[boneName];
+    if (!pieceA || !pieceB || !anchorBone) return;
+    const anchor = anchorBone.getWorldPosition(new THREE.Vector3());
+    const instance = world.createImpulseJoint(RAPIER.JointData.spherical(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor)), pieceA.body, pieceB.body, true);
+    instance.setContactsEnabled(false);
+  };
+  joint('pelvis', 'torso', 'Spine');
+  joint('torso', 'head', 'Head');
+  joint('torso', 'upperArmL', 'LeftArm');
+  joint('upperArmL', 'foreArmL', 'LeftForeArm');
+  joint('torso', 'upperArmR', 'RightArm');
+  joint('upperArmR', 'foreArmR', 'RightForeArm');
+  joint('pelvis', 'thighL', 'LeftUpLeg');
+  joint('thighL', 'shinL', 'LeftLeg');
+  joint('pelvis', 'thighR', 'RightUpLeg');
+  joint('thighR', 'shinR', 'RightLeg');
+
+  pieces.forEach((piece, index) => {
+    const scale = piece.mass * .22;
+    piece.body.applyImpulse({ x: impulse.x * scale, y: impulse.y * scale, z: impulse.z * scale }, true);
+    piece.body.applyTorqueImpulse({ x: (Math.random() - .5) * (2.4 + index * .08), y: (Math.random() - .5) * 1.8, z: (Math.random() - .5) * (2.4 + index * .08) }, true);
+  });
+  return { skinned: true, model, pieces };
+}
+
+export function syncRagdoll(ragdoll) {
+  if (ragdoll?.skinned) {
+    ragdoll.model.updateMatrixWorld(true);
+    ragdoll.pieces.forEach(piece => {
+      const p = piece.body.translation();
+      const r = piece.body.rotation();
+      const bodyRotation = new THREE.Quaternion(r.x, r.y, r.z, r.w);
+      const worldPosition = piece.boneOffset.clone().applyQuaternion(bodyRotation).add(new THREE.Vector3(p.x, p.y, p.z));
+      const worldRotation = bodyRotation.multiply(piece.boneRotationOffset);
+      const parent = piece.bone.parent;
+      parent.updateWorldMatrix(true, false);
+      const localPosition = parent.worldToLocal(worldPosition.clone());
+      const parentRotation = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      piece.bone.position.copy(localPosition);
+      piece.bone.quaternion.copy(parentRotation.multiply(worldRotation));
+      piece.bone.scale.copy(piece.localScale);
+      piece.bone.updateMatrixWorld(true);
+    });
+    ragdoll.model.updateMatrixWorld(true);
+    return;
+  }
+  const pieces = ragdoll;
   pieces.forEach(piece => {
     const p = piece.body.translation();
     const r = piece.body.rotation();
