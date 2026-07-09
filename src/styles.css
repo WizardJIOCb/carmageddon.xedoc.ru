@@ -108,6 +108,9 @@ body::before {
 @keyframes demoCrashRight { 0%,18%{transform:translateX(25vw) rotate(-3deg)}48%{transform:translateX(-10vw) rotate(2deg)}54%,100%{transform:translateX(-12vw) translateY(18px) rotate(34deg)} }
 @keyframes demoCrashLeft { 0%,18%{transform:scaleX(-1) translateX(22vw)}48%{transform:scaleX(-1) translateX(-3vw)}54%,100%{transform:scaleX(-1) translateX(-5vw) translateY(-12px) rotate(-28deg)} }
 @keyframes demoBlast { 0%,46%{opacity:0;transform:scale(.1)}49%{opacity:1;transform:scale(.6)}55%{opacity:.95;transform:scale(2.8)}66%,100%{opacity:0;transform:scale(4.2)} }
+.menu-demo .preview-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; opacity:.96; }
+.demo-loading,.preview-loading { position:absolute; z-index:3; left:50%; top:50%; transform:translate(-50%,-50%); color:var(--acid); font:10px 'Share Tech Mono'; letter-spacing:.18em; white-space:nowrap; text-shadow:0 2px 8px #000; }
+.menu-demo .demo-caption { z-index:3; }
 
 .menu-column {
   position: relative;
@@ -157,13 +160,15 @@ body::before {
 .garage-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: minmax(320px, 1.25fr) minmax(360px, .75fr); }
 .car-stage { position: relative; min-height: 610px; overflow: hidden; background: radial-gradient(ellipse at 50% 65%, #303631 0, #151817 24%, #080909 64%); }
 .car-stage::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.7%, rgba(213,255,24,.1) 50%, transparent 50.3%), linear-gradient(0deg, transparent 49.7%, rgba(213,255,24,.07) 50%, transparent 50.3%); background-size: 80px 80px; transform: perspective(600px) rotateX(62deg) translateY(38%); opacity: .5; }
+.garage-preview-3d { position:absolute; inset:0; overflow:hidden; }
+.garage-preview-3d .preview-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
 .car-preview { position: absolute; left: 50%; top: 51%; width: min(570px, 82%); aspect-ratio: 1.9; transform: translate(-50%,-50%) rotate(-4deg); filter: drop-shadow(0 35px 28px #000); }
 .car-preview .body { position: absolute; inset: 26% 5% 18%; background: var(--car-color, #d5ff18); clip-path: polygon(0 55%, 7% 28%, 31% 18%, 43% 0, 72% 3%, 84% 24%, 97% 37%, 100% 71%, 91% 88%, 11% 91%, 1% 74%); border-bottom: 14px solid #161816; box-shadow: inset 0 10px 0 rgba(255,255,255,.16); }
 .car-preview .glass { position: absolute; inset: 24% 34% 53% 36%; background: linear-gradient(145deg,#465458,#101516); clip-path: polygon(20% 6%, 85% 9%, 100% 100%, 0 94%); }
 .car-preview .wheel { position: absolute; top: 60%; width: 21%; aspect-ratio: 1; border-radius: 50%; border: 18px solid #070707; background: repeating-conic-gradient(#999 0 7deg,#292c2a 7deg 15deg); box-shadow: 0 0 0 4px #262a27; }
 .car-preview .wheel.a { left: 12%; }.car-preview .wheel.b { right: 12%; }
 .car-preview .weapon { position: absolute; left: 45%; top: 22%; width: 25%; height: 9%; background: #333936; box-shadow: 14px -6px 0 -3px #777, 24px -6px 0 -3px #777; transform: skewX(-18deg); }
-.stage-label { position: absolute; left: 6%; bottom: 8%; }
+.stage-label { position: absolute; z-index:2; left: 6%; bottom: 8%; pointer-events:none; }
 .stage-label h3 { margin: 0; font-size: clamp(35px, 5vw, 70px); font-style: italic; line-height: .8; text-transform: uppercase; }
 .stage-label p { color: #777d78; font: 12px 'Share Tech Mono'; }
 

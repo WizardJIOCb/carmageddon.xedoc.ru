@@ -216,17 +216,17 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   const bones = {};
   model.traverse(object => { if (object.isBone) bones[object.name] = object; });
   const definitions = [
-    { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .15, mass: 10 },
-    { name: 'torso', bone: 'Spine', end: 'Neck', radius: .18, mass: 18 },
-    { name: 'head', bone: 'Head', shape: 'ball', radius: .18, mass: 4 },
-    { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .085, mass: 4 },
-    { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .072, mass: 3 },
-    { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .085, mass: 4 },
-    { name: 'foreArmR', bone: 'RightForeArm', end: 'RightHand', radius: .072, mass: 3 },
-    { name: 'thighL', bone: 'LeftUpLeg', end: 'LeftLeg', radius: .12, mass: 8 },
-    { name: 'shinL', bone: 'LeftLeg', end: 'LeftFoot', radius: .095, mass: 6 },
-    { name: 'thighR', bone: 'RightUpLeg', end: 'RightLeg', radius: .12, mass: 8 },
-    { name: 'shinR', bone: 'RightLeg', end: 'RightFoot', radius: .095, mass: 6 },
+    { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .135, mass: 2.2 },
+    { name: 'torso', bone: 'Spine', end: 'Neck', radius: .16, mass: 4.2 },
+    { name: 'head', bone: 'Head', shape: 'ball', radius: .16, mass: 1 },
+    { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .075, mass: .9 },
+    { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .064, mass: .65 },
+    { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .075, mass: .9 },
+    { name: 'foreArmR', bone: 'RightForeArm', end: 'RightHand', radius: .064, mass: .65 },
+    { name: 'thighL', bone: 'LeftUpLeg', end: 'LeftLeg', radius: .106, mass: 1.6 },
+    { name: 'shinL', bone: 'LeftLeg', end: 'LeftFoot', radius: .084, mass: 1.2 },
+    { name: 'thighR', bone: 'RightUpLeg', end: 'RightLeg', radius: .106, mass: 1.6 },
+    { name: 'shinR', bone: 'RightLeg', end: 'RightFoot', radius: .084, mass: 1.2 },
   ];
   const pieces = [];
   const byName = {};
@@ -264,7 +264,7 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
       colliderDesc
         .setMass(def.mass)
         .setFriction(.82)
-        .setRestitution(.035)
+        .setRestitution(.01)
         .setCollisionGroups(0x00020001),
       body,
     );

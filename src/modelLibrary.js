@@ -163,7 +163,7 @@ export class ModelLibrary {
     // three metres tall and its animated bounds regularly fell outside the
     // camera frustum. A human scale plus explicit skinned-mesh visibility keeps
     // the render pass and the shadow pass in agreement.
-    model.scale.setScalar(.0068);
+    model.scale.setScalar(.0059);
     model.traverse(object => {
       if (!object.isMesh) return;
       object.castShadow = true;
@@ -175,11 +175,20 @@ export class ModelLibrary {
       object.material.transparent = false;
       object.material.opacity = 1;
       object.material.depthWrite = true;
+      if ('roughness' in object.material) object.material.roughness = .86;
+      if ('metalness' in object.material) object.material.metalness = 0;
+      if ('shininess' in object.material) object.material.shininess = 4;
+      object.material.specular?.set(0x151515);
+      if ('clearcoat' in object.material) object.material.clearcoat = 0;
       object.material.needsUpdate = true;
     });
     const mixer = new THREE.AnimationMixer(model);
     const idle = mixer.clipAction(this.personAnimations.idle);
     const run = mixer.clipAction(this.personAnimations.run);
+    idle.setLoop(THREE.LoopRepeat, Infinity);
+    run.setLoop(THREE.LoopRepeat, Infinity);
+    idle.enabled = true;
+    run.enabled = true;
     idle.time = Math.random() * Math.max(.01, this.personAnimations.idle.duration);
     run.timeScale = .92 + Math.random() * .2;
     idle.play();
