@@ -32,6 +32,12 @@ body::before {
 .screen { position: fixed; inset: 0; z-index: 5; }
 .hidden { display: none !important; }
 
+.loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:radial-gradient(circle at 50% 45%,#272b28,#080909 55%); }
+.loader-mark { width:96px;height:96px;display:grid;place-items:center;border:2px solid var(--acid);font-size:45px;font-weight:900;font-style:italic;transform:skewX(-8deg);box-shadow:0 0 45px rgba(213,255,24,.12),inset 0 0 35px rgba(213,255,24,.07); }
+.loader-bar { width:min(420px,72vw);height:5px;background:#242824;overflow:hidden;transform:skewX(-18deg); }
+.loader-bar i { display:block;width:0;height:100%;background:var(--acid);box-shadow:0 0 14px var(--acid);transition:width .12s ease; }
+.loading-screen p { margin:0;color:#777d78;font:10px 'Share Tech Mono';letter-spacing:.12em;text-transform:uppercase; }
+
 .menu-screen {
   display: flex;
   align-items: stretch;
