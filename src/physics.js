@@ -287,42 +287,69 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   });
 
   const anchorAt = (piece, point) => point.clone().sub(piece.center).applyQuaternion(piece.bodyRotation.clone().invert());
-  const joint = (a, b, boneName, limits = [-.8, .8], axis = { x: 0, y: 0, z: 1 }) => {
+  const joint = (a, b, boneName) => {
     const pieceA = byName[a], pieceB = byName[b], anchorBone = bones[boneName];
     if (!pieceA || !pieceB || !anchorBone) return;
     const anchor = anchorBone.getWorldPosition(new THREE.Vector3());
-    const data = RAPIER.JointData.revolute(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor), axis);
+    const data = RAPIER.JointData.spherical(anchorAt(pieceA, anchor), anchorAt(pieceB, anchor));
     const instance = world.createImpulseJoint(data, pieceA.body, pieceB.body, true);
-    instance.setLimits(limits[0], limits[1]);
     instance.setContactsEnabled(false);
   };
-  joint('pelvis', 'torso', 'Spine', [-.32, .32]);
-  joint('torso', 'head', 'Head', [-.48, .48]);
-  joint('torso', 'upperArmL', 'LeftArm', [-1.15, 1.25]);
-  joint('upperArmL', 'foreArmL', 'LeftForeArm', [-.12, 2.18]);
-  joint('torso', 'upperArmR', 'RightArm', [-1.25, 1.15]);
-  joint('upperArmR', 'foreArmR', 'RightForeArm', [-.12, 2.18]);
-  joint('pelvis', 'thighL', 'LeftUpLeg', [-.55, 1.15]);
-  joint('thighL', 'shinL', 'LeftLeg', [-.08, 2.05]);
-  joint('pelvis', 'thighR', 'RightUpLeg', [-1.15, .55]);
-  joint('thighR', 'shinR', 'RightLeg', [-.08, 2.05]);
+  joint('pelvis', 'torso', 'Spine');
+  joint('torso', 'head', 'Head');
+  joint('torso', 'upperArmL', 'LeftArm');
+  joint('upperArmL', 'foreArmL', 'LeftForeArm');
+  joint('torso', 'upperArmR', 'RightArm');
+  joint('upperArmR', 'foreArmR', 'RightForeArm');
+  joint('pelvis', 'thighL', 'LeftUpLeg');
+  joint('thighL', 'shinL', 'LeftLeg');
+  joint('pelvis', 'thighR', 'RightUpLeg');
+  joint('thighR', 'shinR', 'RightLeg');
+
+  const rootStartPosition = model.position.clone();
+  const pelvisStartWorld = byName.pelvis?.bone.getWorldPosition(new THREE.Vector3()) || rootStartPosition.clone();
 
   pieces.forEach((piece, index) => {
     const scale = piece.mass * .22;
     piece.body.applyImpulse({ x: impulse.x * scale, y: impulse.y * scale, z: impulse.z * scale }, true);
     piece.body.applyTorqueImpulse({ x: (Math.random() - .5) * (1.1 + index * .04), y: (Math.random() - .5) * .65, z: (Math.random() - .5) * (1.1 + index * .04) }, true);
   });
-  return { skinned: true, model, pieces };
+  return { skinned: true, model, pieces, rootStartPosition, pelvisStartWorld };
 }
 
 export function syncRagdoll(ragdoll) {
   if (ragdoll?.skinned) {
+    const pelvis = ragdoll.pieces.find(piece => piece.name === 'pelvis');
+    if (pelvis) {
+      const p = pelvis.body.translation();
+      const r = pelvis.body.rotation();
+      const rotation = new THREE.Quaternion(r.x, r.y, r.z, r.w);
+      const pelvisWorld = pelvis.boneOffset.clone().applyQuaternion(rotation).add(new THREE.Vector3(p.x, p.y, p.z));
+      ragdoll.model.position.copy(ragdoll.rootStartPosition).add(pelvisWorld).sub(ragdoll.pelvisStartWorld);
+    }
     ragdoll.model.updateMatrixWorld(true);
+    const pelvisPosition = pelvis ? new THREE.Vector3(pelvis.body.translation().x, pelvis.body.translation().y, pelvis.body.translation().z) : null;
     ragdoll.pieces.forEach(piece => {
-      const p = piece.body.translation();
+      let p = piece.body.translation();
       const r = piece.body.rotation();
       const angular = piece.body.angvel();
       const linear = piece.body.linvel();
+      const linearLength = Math.hypot(linear.x, linear.y, linear.z);
+      if (linearLength > 14) {
+        const scale = 14 / linearLength;
+        piece.body.setLinvel({ x: linear.x * scale, y: linear.y * scale, z: linear.z * scale }, true);
+      }
+      if (pelvisPosition && piece !== pelvis) {
+        const position = new THREE.Vector3(p.x, p.y, p.z), offset = position.sub(pelvisPosition);
+        if (!Number.isFinite(offset.lengthSq()) || offset.lengthSq() > 5.29) {
+          if (!Number.isFinite(offset.lengthSq()) || offset.lengthSq() < .001) offset.set(0, .5, 0);
+          offset.setLength(Math.min(2.15, offset.length()));
+          const corrected = pelvisPosition.clone().add(offset), pelvisVelocity = pelvis.body.linvel();
+          piece.body.setTranslation({ x: corrected.x, y: corrected.y, z: corrected.z }, true);
+          piece.body.setLinvel({ x: pelvisVelocity.x, y: pelvisVelocity.y, z: pelvisVelocity.z }, true);
+          p = piece.body.translation();
+        }
+      }
       const groundSettling = p.y < .42 && Math.hypot(linear.x, linear.y, linear.z) < 2.2;
       const maxAngular = groundSettling ? .65 : (piece.name === 'head' ? 2.2 : 5.5);
       const angularLength = Math.hypot(angular.x, angular.y, angular.z);
@@ -331,13 +358,11 @@ export function syncRagdoll(ragdoll) {
         piece.body.setAngvel({ x: angular.x * scale, y: angular.y * scale, z: angular.z * scale }, true);
       }
       const bodyRotation = new THREE.Quaternion(r.x, r.y, r.z, r.w);
-      const worldPosition = piece.boneOffset.clone().applyQuaternion(bodyRotation).add(new THREE.Vector3(p.x, p.y, p.z));
       const worldRotation = bodyRotation.multiply(piece.boneRotationOffset);
       const parent = piece.bone.parent;
       parent.updateWorldMatrix(true, false);
       const parentRotation = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
-      if (piece.name === 'pelvis') piece.bone.position.copy(parent.worldToLocal(worldPosition.clone()));
-      else piece.bone.position.copy(piece.localPosition);
+      piece.bone.position.copy(piece.localPosition);
       piece.bone.quaternion.copy(parentRotation.multiply(worldRotation));
       piece.bone.scale.copy(piece.localScale);
       piece.bone.updateMatrixWorld(true);
