@@ -43,11 +43,15 @@ const CARS = [
   { id:'phantom', name:'Phantom X', class:'Prototype / элита', price:18000, speed:1.3, armor:1.05, handling:1.24, shape:'sport' },
 ];
 
-const WEAPONS = [
-  { id:'ram', name:'Кровавый таран', desc:'Пассивно: +70% урона в лоб', price:0, cooldown:0 },
-  { id:'minigun', name:'Двойной Vulcan', desc:'Плотный огонь перед машиной', price:1800, cooldown:.11 },
-  { id:'rockets', name:'Hellfire ×2', desc:'Ракеты с зоной поражения', price:4200, cooldown:1.35 },
-  { id:'tesla', name:'Катушка «Шок»', desc:'Цепной импульс по ближайшим', price:7600, cooldown:2.4 },
+const MACHINE_GUNS = [
+  { id:'scrapgun', name:'Scrap Gun', desc:'Надёжный одиночный пулемёт', price:0, cooldown:.16, damage:3.2, range:30, spread:.055, kick:34, color:0xffcf68 },
+  { id:'vulcan', name:'Двойной Vulcan', desc:'Высокий темп и плотный огонь', price:1800, cooldown:.095, damage:4.1, range:36, spread:.036, kick:55, color:0xffe369 },
+  { id:'shredder', name:'Shredder M8', desc:'Предельный темп и дальность', price:6200, cooldown:.058, damage:3.7, range:43, spread:.024, kick:72, color:0xfff0a8 },
+];
+const MISSILE_LAUNCHERS = [
+  { id:'none', name:'Без ракет', desc:'Второй слот свободен', price:0, cooldown:0, speed:0, turnRate:0, lockRange:0, damageScale:0 },
+  { id:'sidewinder', name:'Sidewinder', desc:'Самонаведение по цели впереди', price:4200, cooldown:1.65, speed:64, turnRate:3.6, lockRange:58, damageScale:1 },
+  { id:'reaper', name:'Reaper ×2', desc:'Быстрая ракета с цепким захватом', price:9800, cooldown:1.05, speed:76, turnRate:5.2, lockRange:76, damageScale:1.28 },
 ];
 
 const COLORS = ['#d5ff18','#ff3c20','#ededdf','#2669ff','#c90045','#161918','#ffb000','#7e33ff'];
@@ -63,11 +67,14 @@ const LEVELS = [
 const DEFAULT_SAVE = {
   credits: 500000,
   testGrantVersion: 1,
+  weaponLoadoutVersion: 2,
   unlockedLevel: 0,
   ownedCars: ['razor'],
-  ownedWeapons: ['ram'],
+  ownedMachineGuns: ['scrapgun'],
+  ownedMissileLaunchers: ['none'],
   selectedCar: 'razor',
-  selectedWeapon: 'ram',
+  selectedMachineGun: 'scrapgun',
+  selectedMissileLauncher: 'none',
   color: COLORS[0],
   upgrades: {},
   best: {},
@@ -86,11 +93,26 @@ function loadSave() {
   try {
     const stored = JSON.parse(localStorage.getItem('wreckrun-save') || '{}');
     const loaded = { ...structuredClone(DEFAULT_SAVE), ...stored };
+    if ((stored.weaponLoadoutVersion || 0) < DEFAULT_SAVE.weaponLoadoutVersion) {
+      const legacyOwned=stored.ownedWeapons||[];
+      loaded.ownedMachineGuns=['scrapgun'];
+      if(legacyOwned.includes('minigun'))loaded.ownedMachineGuns.push('vulcan');
+      if(legacyOwned.includes('tesla'))loaded.ownedMachineGuns.push('shredder');
+      loaded.ownedMissileLaunchers=['none'];
+      if(legacyOwned.includes('rockets'))loaded.ownedMissileLaunchers.push('sidewinder');
+      loaded.selectedMachineGun=stored.selectedWeapon==='minigun'?'vulcan':(stored.selectedWeapon==='tesla'?'shredder':'scrapgun');
+      loaded.selectedMissileLauncher=stored.selectedWeapon==='rockets'?'sidewinder':'none';
+      loaded.weaponLoadoutVersion=DEFAULT_SAVE.weaponLoadoutVersion;
+    }
+    loaded.ownedMachineGuns=[...new Set(['scrapgun',...(loaded.ownedMachineGuns||[])])].filter(id=>MACHINE_GUNS.some(item=>item.id===id));
+    loaded.ownedMissileLaunchers=[...new Set(['none',...(loaded.ownedMissileLaunchers||[])])].filter(id=>MISSILE_LAUNCHERS.some(item=>item.id===id));
+    if(!loaded.ownedMachineGuns.includes(loaded.selectedMachineGun))loaded.selectedMachineGun='scrapgun';
+    if(!loaded.ownedMissileLaunchers.includes(loaded.selectedMissileLauncher))loaded.selectedMissileLauncher='none';
     if ((stored.testGrantVersion || 0) < DEFAULT_SAVE.testGrantVersion) {
       loaded.credits = Math.max(loaded.credits || 0, DEFAULT_SAVE.credits);
       loaded.testGrantVersion = DEFAULT_SAVE.testGrantVersion;
-      localStorage.setItem('wreckrun-save', JSON.stringify(loaded));
     }
+    localStorage.setItem('wreckrun-save', JSON.stringify(loaded));
     return loaded;
   }
   catch { return structuredClone(DEFAULT_SAVE); }
@@ -152,7 +174,7 @@ function showMenu() {
 function showSettings(tab='controls'){
   stopShowroom();
   const tabs={controls:'Управление',graphics:'Графика',about:'Об игре'};
-  const actions=[['accelerate','Газ'],['brake','Тормоз / задний ход'],['left','Поворот влево'],['right','Поворот вправо'],['handbrake','Ручной тормоз / занос'],['fire','Огонь'],['nitro','Нитро'],['reset','Эвакуация'],['pause','Пауза']];
+  const actions=[['accelerate','Газ'],['brake','Тормоз / задний ход'],['left','Поворот влево'],['right','Поворот вправо'],['handbrake','Ручной тормоз / занос'],['fire','Пулемёт (клавиша)'],['nitro','Нитро'],['reset','Эвакуация'],['pause','Пауза']];
   let content='';
   if(tab==='controls')content=`<div class="settings-section"><div class="settings-heading"><div><div class="eyebrow">INPUT // DRIVER PROFILE</div><h3>Управление</h3></div><button class="ghost-btn compact" data-reset-controls>Сбросить</button></div><div class="setting-slider"><label><span>Чувствительность руля</span><b data-steer-value>${Math.round(settings.steeringSensitivity*100)}%</b></label><input type="range" min="45" max="120" value="${Math.round(settings.steeringSensitivity*100)}" data-steer-sensitivity></div><div class="setting-slider"><label><span>Скорость отклика руля</span><b data-smooth-value>${settings.steeringSmoothing.toFixed(1)}</b></label><input type="range" min="20" max="90" value="${Math.round(settings.steeringSmoothing*10)}" data-steer-smoothing></div><div class="setting-slider"><label><span>Чувствительность камеры</span><b data-camera-value>${Math.round(settings.cameraSensitivity*10000)}</b></label><input type="range" min="25" max="120" value="${Math.round(settings.cameraSensitivity*10000)}" data-camera-sensitivity></div><label class="setting-toggle"><span><strong>Инверсия камеры по горизонтали</strong><small>Меняет направление вращения при перетаскивании мышью</small></span><input type="checkbox" data-invert-camera ${settings.invertCameraX?'checked':''}><i></i></label><div class="binding-grid">${actions.map(([id,label])=>`<div class="binding-row"><span>${label}</span><button class="key-bind" data-bind="${id}">${keyLabel(settings.bindings[id])}</button></div>`).join('')}</div></div>`;
   if(tab==='graphics')content=`<div class="settings-section"><div class="settings-heading"><div><div class="eyebrow">RENDER // QUALITY PROFILE</div><h3>Графика</h3></div></div><div class="quality-grid">${Object.entries(GRAPHICS_PRESETS).map(([id,preset])=>`<button class="quality-card ${settings.graphics===id?'active':''}" data-quality="${id}"><strong>${preset.label}</strong><span>${preset.description}</span><small>${preset.shadows?`ТЕНИ ${preset.shadowSize}px`:'ТЕНИ ВЫКЛ'} · SCALE ${preset.pixelRatio}</small></button>`).join('')}</div><div class="settings-note"><strong>Изменения применяются при следующем запуске сцены.</strong><p>Низкий пресет отключает динамические тени и снижает внутреннее разрешение. Ультра использует повышенное разрешение и карту теней 4096 px.</p></div></div>`;
@@ -171,13 +193,13 @@ function showSettings(tab='controls'){
 
 function showGarage() {
   stopShowroom();
-  const car = currentCar(); const up = upgrades();
+  const car = currentCar(); const up = upgrades(),machineGun=MACHINE_GUNS.find(w=>w.id===save.selectedMachineGun),missileLauncher=MISSILE_LAUNCHERS.find(w=>w.id===save.selectedMissileLauncher);
   app.innerHTML = `<section class="screen panel-screen">
     ${topbar('Гараж // <span>мясорубка</span>')}
     <div class="garage-layout">
       <div class="car-stage">
         <div class="garage-preview-3d" data-garage-preview><div class="preview-loading">ЗАГРУЗКА ПЛАТФОРМЫ...</div></div>
-        <div class="stage-label"><h3>${car.name}</h3><p>${car.class.toUpperCase()} // ОРУЖИЕ: ${WEAPONS.find(w=>w.id===save.selectedWeapon).name.toUpperCase()}</p></div>
+        <div class="stage-label"><h3>${car.name}</h3><p>${car.class.toUpperCase()} // ЛКМ: ${machineGun.name.toUpperCase()} // ПКМ: ${missileLauncher.name.toUpperCase()}</p></div>
       </div>
       <aside class="garage-controls">
         <section class="control-section"><div class="section-kicker"><span>Платформа</span><span>${save.ownedCars.length}/${CARS.length}</span></div>
@@ -192,14 +214,16 @@ function showGarage() {
           </div>
         </section>
         <section class="control-section"><div class="section-kicker"><span>Покраска</span><span>БЕСПЛАТНО</span></div><div class="swatches">${COLORS.map(c=>`<button class="swatch ${save.color===c?'active':''}" data-color="${c}" style="background:${c}" aria-label="Цвет ${c}"></button>`).join('')}</div></section>
-        <section class="control-section"><div class="section-kicker"><span>Крышевое вооружение</span><span>${save.ownedWeapons.length}/${WEAPONS.length}</span></div><div class="weapon-grid">${WEAPONS.map(w=>`<button class="weapon-card ${w.id===save.selectedWeapon?'active':''}" data-weapon="${w.id}"><span><strong>${w.name}</strong><small>${w.desc}</small></span><b>${save.ownedWeapons.includes(w.id)?'УСТАНОВИТЬ':'₡ '+money(w.price)}</b></button>`).join('')}</div></section>
+        <section class="control-section"><div class="section-kicker"><span>Пулемёты // ЛКМ</span><span>${save.ownedMachineGuns.length}/${MACHINE_GUNS.length}</span></div><div class="weapon-grid">${MACHINE_GUNS.map(w=>`<button class="weapon-card ${w.id===save.selectedMachineGun?'active':''}" data-machine-gun="${w.id}"><span><strong>${w.name}</strong><small>${w.desc}</small></span><b>${w.id===save.selectedMachineGun?'УСТАНОВЛЕНО':save.ownedMachineGuns.includes(w.id)?'УСТАНОВИТЬ':'₡ '+money(w.price)}</b></button>`).join('')}</div></section>
+        <section class="control-section"><div class="section-kicker"><span>Самонаводящиеся ракеты // ПКМ</span><span>${save.ownedMissileLaunchers.length}/${MISSILE_LAUNCHERS.length}</span></div><div class="weapon-grid">${MISSILE_LAUNCHERS.map(w=>`<button class="weapon-card missile ${w.id===save.selectedMissileLauncher?'active':''}" data-missile-launcher="${w.id}"><span><strong>${w.name}</strong><small>${w.desc}</small></span><b>${w.id===save.selectedMissileLauncher?'УСТАНОВЛЕНО':save.ownedMissileLaunchers.includes(w.id)?'УСТАНОВИТЬ':'₡ '+money(w.price)}</b></button>`).join('')}</div></section>
         <button class="action-btn" data-race>Выбрать район и выехать</button>
       </aside>
     </div></section>`;
   bindBack();
   document.querySelectorAll('[data-car]').forEach(btn => btn.onclick = () => buyOrSelectCar(btn.dataset.car));
   document.querySelectorAll('[data-color]').forEach(btn => btn.onclick = () => { save.color=btn.dataset.color;persist();showGarage(); });
-  document.querySelectorAll('[data-weapon]').forEach(btn => btn.onclick = () => buyOrSelectWeapon(btn.dataset.weapon));
+  document.querySelectorAll('[data-machine-gun]').forEach(btn => btn.onclick = () => buyOrSelectWeapon('machineGun',btn.dataset.machineGun));
+  document.querySelectorAll('[data-missile-launcher]').forEach(btn => btn.onclick = () => buyOrSelectWeapon('missileLauncher',btn.dataset.missileLauncher));
   document.querySelectorAll('[data-upgrade]').forEach(btn => btn.onclick = () => buyUpgrade(btn.dataset.upgrade));
   document.querySelector('[data-race]').onclick = showCampaign;
   garagePreview = createGaragePreview(document.querySelector('[data-garage-preview]'), car, save.color);
@@ -212,10 +236,10 @@ function buyOrSelectCar(id) {
   if (!save.ownedCars.includes(id)) { if(save.credits<car.price){showToast('Не хватает деталей');return;} save.credits-=car.price;save.ownedCars.push(id);showToast(`${car.name} куплен`); }
   save.selectedCar=id; persist(); showGarage();
 }
-function buyOrSelectWeapon(id) {
-  const weapon=WEAPONS.find(w=>w.id===id);
-  if(!save.ownedWeapons.includes(id)){if(save.credits<weapon.price){showToast('Не хватает деталей');return;}save.credits-=weapon.price;save.ownedWeapons.push(id);showToast(`${weapon.name} установлен`);}
-  save.selectedWeapon=id;persist();showGarage();
+function buyOrSelectWeapon(type,id) {
+  const machineGun=type==='machineGun',weapons=machineGun?MACHINE_GUNS:MISSILE_LAUNCHERS,ownedKey=machineGun?'ownedMachineGuns':'ownedMissileLaunchers',selectedKey=machineGun?'selectedMachineGun':'selectedMissileLauncher',weapon=weapons.find(w=>w.id===id);if(!weapon)return;
+  if(!save[ownedKey].includes(id)){if(save.credits<weapon.price){showToast('Не хватает деталей');return;}save.credits-=weapon.price;save[ownedKey].push(id);showToast(`${weapon.name} куплен`);}
+  save[selectedKey]=id;persist();showGarage();
 }
 function buyUpgrade(type){
   const up=upgrades(); const cost=(up[type]+1)*900;
@@ -235,7 +259,7 @@ function showCampaign() {
 function showBriefing(id){
   stopShowroom();
   const level=LEVELS[id];
-  app.innerHTML=`<section class="screen panel-screen" style="background:${level.bg}"><div class="briefing-modal"><div class="modal-card"><div class="eyebrow">БРИФИНГ // УРОВЕНЬ 0${id+1}</div><h2>${level.name}</h2><p>${level.desc}</p><div class="result-stats"><div class="result-stat"><strong>${level.laps}</strong><small>КРУГА</small></div><div class="result-stat"><strong>${level.enemies}</strong><small>СОПЕРНИКОВ</small></div><div class="result-stat"><strong>${level.quota}</strong><small>КВОТА</small></div></div><p>Победи любым способом. Награда: <b style="color:var(--acid)">₡ ${money(level.reward)}</b><br>Управление: ${keyLabel(settings.bindings.accelerate)} / ${keyLabel(settings.bindings.brake)} / ${keyLabel(settings.bindings.left)} / ${keyLabel(settings.bindings.right)} · ${keyLabel(settings.bindings.handbrake)} — ручник · ${keyLabel(settings.bindings.fire)} — огонь · ${keyLabel(settings.bindings.nitro)} — нитро · ${keyLabel(settings.bindings.reset)} — эвакуация.</p><div class="modal-actions"><button class="action-btn" data-deploy>Выехать на старт</button><button class="ghost-btn" data-cancel>Вернуться</button></div></div></div></section>`;
+  app.innerHTML=`<section class="screen panel-screen" style="background:${level.bg}"><div class="briefing-modal"><div class="modal-card"><div class="eyebrow">БРИФИНГ // УРОВЕНЬ 0${id+1}</div><h2>${level.name}</h2><p>${level.desc}</p><div class="result-stats"><div class="result-stat"><strong>${level.laps}</strong><small>КРУГА</small></div><div class="result-stat"><strong>${level.enemies}</strong><small>СОПЕРНИКОВ</small></div><div class="result-stat"><strong>${level.quota}</strong><small>КВОТА</small></div></div><p>Победи любым способом. Награда: <b style="color:var(--acid)">₡ ${money(level.reward)}</b><br>Управление: ${keyLabel(settings.bindings.accelerate)} / ${keyLabel(settings.bindings.brake)} / ${keyLabel(settings.bindings.left)} / ${keyLabel(settings.bindings.right)} · ${keyLabel(settings.bindings.handbrake)} — ручник · ЛКМ — пулемёт · ПКМ — ракета · СКМ — обзор · ${keyLabel(settings.bindings.nitro)} — нитро · ${keyLabel(settings.bindings.reset)} — эвакуация.</p><div class="modal-actions"><button class="action-btn" data-deploy>Выехать на старт</button><button class="ghost-btn" data-cancel>Вернуться</button></div></div></div></section>`;
   document.querySelector('[data-deploy]').onclick=()=>startGame(id);
   document.querySelector('[data-cancel]').onclick=showCampaign;
 }
@@ -251,7 +275,7 @@ async function startGame(levelId){
 class WreckrunGame {
   constructor(level){
     this.level=level; this.clock=new THREE.Clock(); this.keys={}; this.entities=[]; this.opponents=[]; this.pedestrians=[]; this.particles=[]; this.projectiles=[];
-    this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.navigationObstacles=[];this.burningCars=[];this.bloodDecals=[];this.deferredEffects=[];this.effectLights=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.impactFxCooldown=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.totalDamage=0;this.runCredits=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastShot=-10;this.shake=0;this.accumulator=0;this.playerDeathPending=false;this.deathModalAt=Infinity;this.victoryPending=false;this.victoryModalAt=Infinity;this.cameraOrbitYaw=0;this.cameraOrbitPitch=0;this.cameraDragging=false;this.lastCameraInput=-10;this.boostIntensity=0;this.boostEmit=0;
+    this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.navigationObstacles=[];this.burningCars=[];this.bloodDecals=[];this.deferredEffects=[];this.effectLights=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.impactFxCooldown=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.totalDamage=0;this.runCredits=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastPrimaryShot=-10;this.lastMissileShot=-10;this.pointerFire={primary:false,secondary:false};this.shake=0;this.accumulator=0;this.playerDeathPending=false;this.deathModalAt=Infinity;this.victoryPending=false;this.victoryModalAt=Infinity;this.cameraOrbitYaw=0;this.cameraOrbitPitch=0;this.cameraDragging=false;this.lastCameraInput=-10;this.boostIntensity=0;this.boostEmit=0;
   }
 
   async init(){
@@ -378,8 +402,8 @@ class WreckrunGame {
   }
 
   setupUI(){
-    const weapon=WEAPONS.find(w=>w.id===save.selectedWeapon);
-    this.hud=document.createElement('div');this.hud.className='screen hud';this.hud.innerHTML=`<div class="damage-flash"></div><div class="hud-top"><div class="race-objective"><small>Три пути к победе</small><strong>Круг <span data-lap>1/${this.level.laps}</span> · Враги <span data-enemies>${this.opponents.length}</span> · Квота <span data-kills>0/${this.level.quota}</span></strong><div class="combat-stats"><span>УРОН <b data-total-damage>0</b></span><span>ДОБЫЧА <b data-run-credits>₡ 0</b></span></div></div><div class="timer"><small>${this.level.name} // ${this.level.weather}</small><span data-time>00:00.000</span></div></div>${this.buildMinimapMarkup()}<div class="event-feed"></div><div class="crosshair"></div><div class="hud-bottom"><div class="car-vitals"><div class="vital health"><span class="hud-label">Корпус</span><strong data-health>100%</strong></div><div class="vital nitro"><span class="hud-label">Нитро</span><strong data-nitro>100%</strong></div><div class="vital weapon"><span class="hud-label">Оружие</span><strong data-weapon>${weapon.id==='ram'?'RAM':'READY'}</strong></div></div><div class="controls-hint"><b>ЛКМ</b> обзор · <b>${keyLabel(settings.bindings.accelerate)} / ${keyLabel(settings.bindings.brake)}</b> движение · <b>${keyLabel(settings.bindings.handbrake)}</b> занос · <b>${keyLabel(settings.bindings.fire)}</b> огонь · <b>${keyLabel(settings.bindings.nitro)}</b> нитро</div><div class="speedo"><strong data-speed>000</strong><span>KM/H</span><i style="--speed:0%"></i></div></div>`;app.append(this.hud);
+    const machineGun=MACHINE_GUNS.find(w=>w.id===save.selectedMachineGun),missileLauncher=MISSILE_LAUNCHERS.find(w=>w.id===save.selectedMissileLauncher);
+    this.hud=document.createElement('div');this.hud.className='screen hud';this.hud.innerHTML=`<div class="damage-flash"></div><div class="hud-top"><div class="race-objective"><small>Три пути к победе</small><strong>Круг <span data-lap>1/${this.level.laps}</span> · Враги <span data-enemies>${this.opponents.length}</span> · Квота <span data-kills>0/${this.level.quota}</span></strong><div class="combat-stats"><span>УРОН <b data-total-damage>0</b></span><span>ДОБЫЧА <b data-run-credits>₡ 0</b></span></div></div><div class="timer"><small>${this.level.name} // ${this.level.weather}</small><span data-time>00:00.000</span></div></div>${this.buildMinimapMarkup()}<div class="event-feed"></div><div class="crosshair"></div><div class="hud-bottom"><div class="car-vitals"><div class="vital health"><span class="hud-label">Корпус</span><strong data-health>100%</strong></div><div class="vital nitro"><span class="hud-label">Нитро</span><strong data-nitro>100%</strong></div><div class="vital weapon"><span class="hud-label">ЛКМ // ${machineGun.name}</span><strong data-machine-gun-status>READY</strong></div><div class="vital missile"><span class="hud-label">ПКМ // ${missileLauncher.name}</span><strong data-missile-status>${missileLauncher.id==='none'?'EMPTY':'SEARCH'}</strong></div></div><div class="controls-hint"><b>ЛКМ</b> пулемёт · <b>ПКМ</b> ракета · <b>СКМ</b> обзор · <b>${keyLabel(settings.bindings.accelerate)} / ${keyLabel(settings.bindings.brake)}</b> движение · <b>${keyLabel(settings.bindings.handbrake)}</b> занос · <b>${keyLabel(settings.bindings.nitro)}</b> нитро</div><div class="speedo"><strong data-speed>000</strong><span>KM/H</span><i style="--speed:0%"></i></div></div>`;app.append(this.hud);
     this.mapPlayer=this.hud.querySelector('.map-player');this.mapEnemies=this.opponents.map((_,i)=>this.hud.querySelector(`[data-map-enemy="${i}"]`));this.mapPedestrians=this.pedestrians.map((_,i)=>this.hud.querySelector(`[data-map-ped="${i}"]`));this.mapProps=this.destructibles.map((_,i)=>this.hud.querySelector(`[data-map-prop="${i}"]`));this.mapCheckpoints=this.waypoints.map((_,i)=>this.hud.querySelector(`[data-map-checkpoint="${i}"]`));
     this.feedEl=this.hud.querySelector('.event-feed');this.addEvent('Двигатели запущены. <strong>УНИЧТОЖАЙ.</strong>');
   }
@@ -387,10 +411,10 @@ class WreckrunGame {
   bindEvents(){
     this.onKeyDown=e=>{this.keys[e.code]=true;if(!e.repeat&&e.code===settings.bindings.pause)this.togglePause();if(!e.repeat&&e.code===settings.bindings.reset)this.resetPlayer();const debug=new URLSearchParams(location.search).has('debugRagdoll');if(debug&&e.code==='KeyK'){const target=this.pedestrians.find(p=>!p.userData.dead);if(target){target.position.copy(this.player.position).add(new THREE.Vector3(0,0,3).applyQuaternion(this.player.quaternion));this.ragdollPedestrian(target);}}if(debug&&e.code==='KeyL')this.damageCar(this.player,999);if(debug&&e.code==='KeyO'){const target=this.opponents.find(ai=>!ai.userData.dead);if(target)this.damageCar(target,999,this.player);}};
     this.onKeyUp=e=>{this.keys[e.code]=false;};this.onResize=()=>{this.camera.aspect=innerWidth/innerHeight;this.camera.updateProjectionMatrix();this.renderer.setSize(innerWidth,innerHeight);};
-    this.onPointerDown=e=>{if(e.button!==0||this.paused||this.ended)return;this.cameraDragging=true;this.lastCameraInput=this.elapsed;this.pointerX=e.clientX;this.pointerY=e.clientY;this.renderer.domElement.classList.add('camera-dragging');this.renderer.domElement.setPointerCapture?.(e.pointerId);};
+    this.onPointerDown=e=>{if(this.paused||this.ended)return;if(e.button===0)this.pointerFire.primary=true;else if(e.button===2)this.pointerFire.secondary=true;else if(e.button===1){this.cameraDragging=true;this.lastCameraInput=this.elapsed;this.pointerX=e.clientX;this.pointerY=e.clientY;this.renderer.domElement.classList.add('camera-dragging');}else return;e.preventDefault();this.renderer.domElement.setPointerCapture?.(e.pointerId);};
     this.onPointerMove=e=>{if(!this.cameraDragging)return;const dx=e.clientX-this.pointerX,dy=e.clientY-this.pointerY;this.pointerX=e.clientX;this.pointerY=e.clientY;const direction=settings.invertCameraX?-1:1;this.cameraOrbitYaw=THREE.MathUtils.euclideanModulo(this.cameraOrbitYaw+dx*settings.cameraSensitivity*direction+Math.PI,Math.PI*2)-Math.PI;this.cameraOrbitPitch=THREE.MathUtils.clamp(this.cameraOrbitPitch+dy*settings.cameraSensitivity*.75,-.38,.62);this.lastCameraInput=this.elapsed;};
-    this.onPointerUp=e=>{if(!this.cameraDragging)return;this.cameraDragging=false;this.lastCameraInput=this.elapsed;this.renderer.domElement.classList.remove('camera-dragging');this.renderer.domElement.releasePointerCapture?.(e.pointerId);};
-    addEventListener('keydown',this.onKeyDown);addEventListener('keyup',this.onKeyUp);addEventListener('resize',this.onResize);this.renderer.domElement.addEventListener('pointerdown',this.onPointerDown);this.renderer.domElement.addEventListener('pointermove',this.onPointerMove);this.renderer.domElement.addEventListener('pointerup',this.onPointerUp);this.renderer.domElement.addEventListener('pointercancel',this.onPointerUp);
+    this.onPointerUp=e=>{if(e.button===0)this.pointerFire.primary=false;if(e.button===2)this.pointerFire.secondary=false;if(e.button===1&&this.cameraDragging){this.cameraDragging=false;this.lastCameraInput=this.elapsed;this.renderer.domElement.classList.remove('camera-dragging');}this.renderer.domElement.releasePointerCapture?.(e.pointerId);};this.onPointerCancel=e=>{this.pointerFire.primary=this.pointerFire.secondary=false;this.cameraDragging=false;this.renderer.domElement.classList.remove('camera-dragging');this.renderer.domElement.releasePointerCapture?.(e.pointerId);};this.onContextMenu=e=>e.preventDefault();
+    addEventListener('keydown',this.onKeyDown);addEventListener('keyup',this.onKeyUp);addEventListener('resize',this.onResize);this.renderer.domElement.addEventListener('pointerdown',this.onPointerDown);this.renderer.domElement.addEventListener('pointermove',this.onPointerMove);this.renderer.domElement.addEventListener('pointerup',this.onPointerUp);this.renderer.domElement.addEventListener('pointercancel',this.onPointerCancel);this.renderer.domElement.addEventListener('contextmenu',this.onContextMenu);
   }
 
   animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.syncDestructibles();this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateBurningCars(dt);this.updateDeferredEffects(dt);this.updateParticles(dt);this.updateBloodDecals(dt);if(this.playerDeathPending&&this.elapsed>=this.deathModalAt)this.finish(false,'МАШИНА УНИЧТОЖЕНА');this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
@@ -401,7 +425,7 @@ class WreckrunGame {
     const throttle=(forward?1:0)-(reverse?1:0),steer=((left?1:0)-(right?1:0))*d.handling;
     driveVehicle(d.vehicle,{throttle,steer,steerSensitivity:settings.steeringSensitivity,steerSmoothing:settings.steeringSmoothing,brake:!throttle&&Math.abs(d.speed)<1?.15:0,handbrake,boost:boosting},dt);d.speed=d.vehicle.controller.currentVehicleSpeed();
     if((Math.abs(steer)>.35&&Math.abs(d.speed)>12&&Math.random()<.25)||(handbrake&&Math.abs(d.speed)>7&&Math.random()<dt*26))this.emitSmoke(this.player,handbrake?0x958b7b:0x777777,handbrake?.22:.16);
-    if(this.actionPressed('fire'))this.fireWeapon();this.checkCheckpoint();
+    if(this.pointerFire.primary||this.actionPressed('fire'))this.fireMachineGun();if(this.pointerFire.secondary)this.fireMissile();this.checkCheckpoint();
     if(d.health<d.maxHealth*.42&&Math.random()<dt*5)this.emitSmoke(this.player,d.health<d.maxHealth*.2?0x171717:0x555555,.5);
   }
 
@@ -490,7 +514,7 @@ class WreckrunGame {
       if(obstacle2&&!obstacle2.pendingBreak&&this.damageObstacle(obstacle2,force,car1)){obstacle2.pendingBreak=true;breaks.push({obstacle:obstacle2,direction:direction.clone(),source:car1});}
       if(force<15000)return;
       if(car1&&car2){this.resolveVehicleImpact(car1,car2,force);return;}
-      const apply=(car,dir,other,otherCollider)=>{if(!car||car.userData.dead||otherCollider?.userData?.type==='ground')return;if(!other&&force<52000)return;if(this.elapsed-car.userData.lastImpact<.48)return;car.userData.lastImpact=this.elapsed;let amount=THREE.MathUtils.clamp((force-15000)/26000,0,24);if(car!==this.player&&other===this.player&&save.selectedWeapon==='ram')amount*=1.5;if(amount<.7)return;const hit=otherCollider?.translation?.(),impactDirection=hit?new THREE.Vector3(hit.x,0,hit.z).sub(car.position).setY(0):dir;if(impactDirection.lengthSq()<.01)impactDirection.copy(dir);impactDirection.normalize();this.damageCar(car,amount,other);this.deformCar(car,impactDirection,amount);this.shake=Math.max(this.shake,Math.min(.9,amount/26));};
+      const apply=(car,dir,other,otherCollider)=>{if(!car||car.userData.dead||otherCollider?.userData?.type==='ground')return;if(!other&&force<52000)return;if(this.elapsed-car.userData.lastImpact<.48)return;car.userData.lastImpact=this.elapsed;const amount=THREE.MathUtils.clamp((force-15000)/26000,0,24);if(amount<.7)return;const hit=otherCollider?.translation?.(),impactDirection=hit?new THREE.Vector3(hit.x,0,hit.z).sub(car.position).setY(0):dir;if(impactDirection.lengthSq()<.01)impactDirection.copy(dir);impactDirection.normalize();this.damageCar(car,amount,other);this.deformCar(car,impactDirection,amount);this.shake=Math.max(this.shake,Math.min(.9,amount/26));};
       apply(car1,direction,car2,collider2);apply(car2,direction.clone().negate(),car1,collider1);
     });
     breaks.forEach(item=>this.breakObstacle(item.obstacle,item.direction,item.source));
@@ -500,8 +524,8 @@ class WreckrunGame {
     if(this.elapsed-car1.userData.lastImpact<.42&&this.elapsed-car2.userData.lastImpact<.42)return;
     const body1=car1.userData.vehicle.body,body2=car2.userData.vehicle.body,v1=body1.linvel(),v2=body2.linvel(),to2=car2.position.clone().sub(car1.position).setY(0);if(to2.lengthSq()<.01)to2.set(1,0,0);to2.normalize();
     const attack1=Math.max(0,v1.x*to2.x+v1.z*to2.z)*body1.mass(),attack2=Math.max(0,-v2.x*to2.x-v2.z*to2.z)*body2.mass(),base=THREE.MathUtils.clamp((force-12000)/23500,0,28);let damage1=base*.72,damage2=base*.72;
-    if(attack1>attack2*1.12+250){const ratio=Math.min(4,attack1/Math.max(600,attack2));damage1=base*(.06+.08/ratio);damage2=base*(1.05+Math.min(.9,(ratio-1)*.35));if(car1===this.player&&save.selectedWeapon==='ram')damage2*=1.65;}
-    else if(attack2>attack1*1.12+250){const ratio=Math.min(4,attack2/Math.max(600,attack1));damage2=base*(.06+.08/ratio);damage1=base*(1.05+Math.min(.9,(ratio-1)*.35));if(car2===this.player&&save.selectedWeapon==='ram')damage1*=1.65;}
+    if(attack1>attack2*1.12+250){const ratio=Math.min(4,attack1/Math.max(600,attack2));damage1=base*(.06+.08/ratio);damage2=base*(1.05+Math.min(.9,(ratio-1)*.35));}
+    else if(attack2>attack1*1.12+250){const ratio=Math.min(4,attack2/Math.max(600,attack1));damage2=base*(.06+.08/ratio);damage1=base*(1.05+Math.min(.9,(ratio-1)*.35));}
     const apply=(car,other,amount,direction)=>{if(car.userData.dead||amount<.45)return;car.userData.lastImpact=this.elapsed;this.damageCar(car,amount,other);this.deformCar(car,direction,amount);};
     // `to2` points at car2, therefore it is the actual contact face on car1.
     // Using its inverse here dented the rear/right side on front/left impacts.
@@ -582,25 +606,24 @@ class WreckrunGame {
     for(let i=this.burningCars.length-1;i>=0;i--){const fire=this.burningCars[i];fire.life-=dt;fire.emit-=dt;if(fire.lightSlot){fire.lightSlot.light.position.copy(fire.car.position).add(new THREE.Vector3(0,.9,0));fire.lightSlot.light.intensity=8+Math.random()*16;}if(fire.emit<=0){fire.emit=.045+Math.random()*.055;const pos=fire.car.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.8,.55+Math.random()*.8,(Math.random()-.5)*2.2));this.emitFlame(pos,Math.random()<.45?0xffe24a:0xff4b12,.35+Math.random()*.6,.35+Math.random()*.55,new THREE.Vector3((Math.random()-.5)*1.2,1.4+Math.random()*2,(Math.random()-.5)*1.2));if(Math.random()<.45)this.emitFlame(pos,0x242323,.55+Math.random()*.7,1+Math.random()*1.2,new THREE.Vector3((Math.random()-.5)*.8,1+Math.random()*1.3,(Math.random()-.5)*.8),true);}if(fire.life<=0){this.releaseEffectLight(fire.lightSlot);this.burningCars.splice(i,1);}}
   }
 
-  fireWeapon(){
-    const w=WEAPONS.find(x=>x.id===save.selectedWeapon);if(w.id==='ram')return;if(this.elapsed-this.lastShot<w.cooldown)return;this.lastShot=this.elapsed;
-    if(w.id==='minigun'){
-      const targets=this.targetsAhead(34,.5);const origin=this.player.position.clone().add(new THREE.Vector3(0,1.5,0));const target=targets[0]?.position.clone().add(new THREE.Vector3(0,.6,0))||origin.clone().add(new THREE.Vector3(0,0,35).applyQuaternion(this.player.quaternion));this.makeTracer(origin,target,0xffe369);if(targets[0]){this.damageCar(targets[0],5.5,this.player);const kick=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).multiplyScalar(85);targets[0].userData.vehicle.body.applyImpulse({x:kick.x,y:5,z:kick.z},true);}this.sparkBurst(target,5);
-    } else if(w.id==='rockets'){
-      const rocket=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,.72,10),new THREE.MeshStandardMaterial({color:0x2a2d2b,emissive:0xff3d0d,emissiveIntensity:2.6,roughness:.34,metalness:.75}));rocket.rotation.x=Math.PI/2;rocket.position.copy(this.player.position).add(new THREE.Vector3(0,1.45,1.5).applyQuaternion(this.player.quaternion));rocket.quaternion.copy(this.player.quaternion);const flare=new THREE.PointLight(0xff5a17,8,7,2);flare.position.set(0,0,.32);rocket.add(flare);rocket.userData={vel:new THREE.Vector3(0,0,72).applyQuaternion(this.player.quaternion),life:2.25,trail:0};this.scene.add(rocket);this.projectiles.push(rocket);
-    } else {
-      const targets=this.targetsAhead(22,-.2).slice(0,3);targets.forEach((t,i)=>{this.makeLightning(this.player.position,t.position);this.damageCar(t,20-i*5,this.player);});if(targets.length)this.addEvent('<strong>ЦЕПНОЙ РАЗРЯД</strong>');
-    }
+  fireMachineGun(){
+    const weapon=MACHINE_GUNS.find(x=>x.id===save.selectedMachineGun)||MACHINE_GUNS[0];if(this.elapsed-this.lastPrimaryShot<weapon.cooldown)return;this.lastPrimaryShot=this.elapsed;const origin=this.player.position.clone().add(new THREE.Vector3(0,.22,0)),direction=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize().applyAxisAngle(_up,(Math.random()-.5)*weapon.spread),ray=new RAPIER.Ray(origin,direction),worldHit=this.physics.castRay(ray,weapon.range,true,undefined,undefined,this.player.userData.vehicle.collider,this.player.userData.vehicle.body),worldDistance=worldHit?.timeOfImpact??weapon.range,end=origin.clone().addScaledVector(direction,weapon.range),segment=new THREE.Line3(origin,end),closest=new THREE.Vector3();let pedHit=null,pedPoint=null,pedDistance=Infinity;for(const p of this.pedestrians){if(p.userData.dead)continue;const target=p.position.clone().add(new THREE.Vector3(0,.72,0));segment.closestPointToPoint(target,true,closest);const along=origin.distanceTo(closest);if(along<=worldDistance+.1&&closest.distanceTo(target)<.58&&along<pedDistance){pedHit=p;pedPoint=closest.clone();pedDistance=along;}}let impact=origin.clone().addScaledVector(direction,worldDistance);if(pedHit&&pedDistance<=worldDistance){impact.copy(pedPoint);this.ragdollPedestrian(pedHit,direction,7,false);}else if(worldHit){const car=this.colliderVehicles.get(worldHit.collider.handle);if(car&&car!==this.player&&!car.userData.dead){this.damageCar(car,weapon.damage,this.player);const kick=direction.clone().multiplyScalar(weapon.kick);car.userData.vehicle.body.applyImpulse({x:kick.x,y:3,z:kick.z},true);}else this.sparkBurst(impact,4,direction.clone().negate());}this.makeTracer(origin,impact,weapon.color);
   }
 
-  targetsAhead(range,dotMin){const f=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3());return this.opponents.filter(o=>!o.userData.dead&&o.position.distanceTo(this.player.position)<range&&f.dot(o.position.clone().sub(this.player.position).normalize())>dotMin).sort((a,b)=>a.position.distanceTo(this.player.position)-b.position.distanceTo(this.player.position));}
+  acquireMissileTarget(launcher=MISSILE_LAUNCHERS.find(x=>x.id===save.selectedMissileLauncher)){
+    if(!launcher||launcher.id==='none')return null;const forward=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize();return this.opponents.filter(o=>!o.userData.dead).map(o=>{const offset=o.position.clone().sub(this.player.position),distance=offset.length(),alignment=forward.dot(offset.normalize());return{o,distance,alignment,score:distance*(1.35-alignment)};}).filter(item=>item.distance<launcher.lockRange&&item.alignment>.12).sort((a,b)=>a.score-b.score)[0]?.o||null;
+  }
+
+  fireMissile(){
+    const launcher=MISSILE_LAUNCHERS.find(x=>x.id===save.selectedMissileLauncher)||MISSILE_LAUNCHERS[0];if(launcher.id==='none'||this.elapsed-this.lastMissileShot<launcher.cooldown)return;this.lastMissileShot=this.elapsed;const target=this.acquireMissileTarget(launcher),rocket=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,.72,10),new THREE.MeshStandardMaterial({color:0x2a2d2b,emissive:0xff3d0d,emissiveIntensity:2.6,roughness:.34,metalness:.75})),launchDirection=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize();rocket.position.copy(this.player.position).addScaledVector(launchDirection,1.65);rocket.position.y+=.3;rocket.quaternion.setFromUnitVectors(_up,launchDirection);const flare=new THREE.PointLight(0xff5a17,8,7,2);flare.position.set(0,-.32,0);rocket.add(flare);rocket.userData={vel:launchDirection.multiplyScalar(launcher.speed),speed:launcher.speed,turnRate:launcher.turnRate,target,damageScale:launcher.damageScale,life:2.65,trail:0};this.scene.add(rocket);this.projectiles.push(rocket);this.addEvent(target?`<strong>ЦЕЛЬ ЗАХВАЧЕНА:</strong> ${target.userData.name}`:'<strong>РАКЕТА:</strong> свободный пуск');
+  }
 
   updateProjectiles(dt){
-    for(let i=this.projectiles.length-1;i>=0;i--){const r=this.projectiles[i],previous=r.position.clone();r.position.addScaledVector(r.userData.vel,dt);r.userData.life-=dt;r.userData.trail-=dt;if(r.userData.trail<=0){r.userData.trail=.016;const rear=r.position.clone().addScaledVector(r.userData.vel.clone().normalize(),-.42);this.emitFlame(rear,Math.random()<.4?0xffe56d:0xff4814,.28+Math.random()*.2,.18+Math.random()*.16,r.userData.vel.clone().multiplyScalar(-.025).add(new THREE.Vector3((Math.random()-.5)*1.2,(Math.random()-.5)*.8,(Math.random()-.5)*1.2)));if(Math.random()<.55)this.emitFlame(rear,0x3d3937,.28+Math.random()*.25,.55+Math.random()*.35,new THREE.Vector3((Math.random()-.5)*.5,.45+Math.random()*.5,(Math.random()-.5)*.5),true);}const travel=r.position.clone().sub(previous),distance=travel.length(),direction=travel.clone().normalize(),ray=new RAPIER.Ray(previous,direction),worldHit=this.physics.castRay(ray,distance+.35,true,undefined,undefined,this.player.userData.vehicle.collider,this.player.userData.vehicle.body),segment=new THREE.Line3(previous,r.position),closest=new THREE.Vector3();let pedHit=null,pedPoint=null,pedDistance=Infinity;for(const p of this.pedestrians){if(p.userData.dead)continue;const target=p.position.clone().add(new THREE.Vector3(0,.75,0));segment.closestPointToPoint(target,true,closest);const d=closest.distanceTo(target);if(d<.72){const along=previous.distanceTo(closest);if(along<pedDistance){pedDistance=along;pedHit=p;pedPoint=closest.clone();}}}const physicsDistance=worldHit?.timeOfImpact??Infinity;if(pedHit&&pedDistance<=physicsDistance)this.detonateRocket(r,pedPoint,pedHit,null);else if(worldHit){const hitPoint=previous.clone().addScaledVector(direction,worldHit.timeOfImpact);this.detonateRocket(r,hitPoint,null,worldHit.collider);}else if(r.userData.life<0)this.detonateRocket(r,r.position.clone(),null,null);if(!r.parent)this.projectiles.splice(i,1);}
+    for(let i=this.projectiles.length-1;i>=0;i--){const r=this.projectiles[i],previous=r.position.clone(),lockedTarget=r.userData.target;if(lockedTarget?.userData.dead)r.userData.target=null;if(r.userData.target){const desired=r.userData.target.position.clone().add(new THREE.Vector3(0,.1,0)).sub(r.position).normalize(),steering=1-Math.exp(-r.userData.turnRate*dt),heading=r.userData.vel.clone().normalize().lerp(desired,steering).normalize();r.userData.vel.copy(heading).multiplyScalar(r.userData.speed);r.quaternion.setFromUnitVectors(_up,heading);}r.position.addScaledVector(r.userData.vel,dt);r.userData.life-=dt;r.userData.trail-=dt;if(r.userData.trail<=0){r.userData.trail=.016;const rear=r.position.clone().addScaledVector(r.userData.vel.clone().normalize(),-.42);this.emitFlame(rear,Math.random()<.4?0xffe56d:0xff4814,.28+Math.random()*.2,.18+Math.random()*.16,r.userData.vel.clone().multiplyScalar(-.025).add(new THREE.Vector3((Math.random()-.5)*1.2,(Math.random()-.5)*.8,(Math.random()-.5)*1.2)));if(Math.random()<.55)this.emitFlame(rear,0x3d3937,.28+Math.random()*.25,.55+Math.random()*.35,new THREE.Vector3((Math.random()-.5)*.5,.45+Math.random()*.5,(Math.random()-.5)*.5),true);}const travel=r.position.clone().sub(previous),distance=travel.length(),direction=travel.clone().normalize(),ray=new RAPIER.Ray(previous,direction),worldHit=this.physics.castRay(ray,distance+.35,true,undefined,undefined,this.player.userData.vehicle.collider,this.player.userData.vehicle.body),segment=new THREE.Line3(previous,r.position),closest=new THREE.Vector3();let pedHit=null,pedPoint=null,pedDistance=Infinity;for(const p of this.pedestrians){if(p.userData.dead)continue;const target=p.position.clone().add(new THREE.Vector3(0,.75,0));segment.closestPointToPoint(target,true,closest);const d=closest.distanceTo(target);if(d<.78){const along=previous.distanceTo(closest);if(along<pedDistance){pedDistance=along;pedHit=p;pedPoint=closest.clone();}}}let vehicleHit=null,vehiclePoint=null,vehicleDistance=Infinity;for(const o of this.opponents){if(o.userData.dead)continue;const target=o.position.clone().add(new THREE.Vector3(0,.1,0)),radius=o.userData.vehicle.dimensions.width*.55;segment.closestPointToPoint(target,true,closest);if(closest.distanceTo(target)<radius){const along=previous.distanceTo(closest);if(along<vehicleDistance){vehicleDistance=along;vehicleHit=o;vehiclePoint=closest.clone();}}}const physicsDistance=worldHit?.timeOfImpact??Infinity,entityDistance=Math.min(pedDistance,vehicleDistance);if(entityDistance<Infinity&&entityDistance<=physicsDistance){if(pedDistance<=vehicleDistance)this.detonateRocket(r,pedPoint,pedHit,null);else this.detonateRocket(r,vehiclePoint,null,vehicleHit.userData.vehicle.collider);}else if(worldHit){const hitPoint=previous.clone().addScaledVector(direction,worldHit.timeOfImpact);this.detonateRocket(r,hitPoint,null,worldHit.collider);}else if(r.userData.life<0)this.detonateRocket(r,r.position.clone(),null,null);if(!r.parent)this.projectiles.splice(i,1);}
   }
 
   detonateRocket(rocket,position,directPed,hitCollider){
-    rocket.position.copy(position);this.renderer.domElement.dataset.lastRocketImpact=directPed?'pedestrian':(hitCollider?.userData?.type||'range');const direction=rocket.userData.vel.clone().normalize();if(directPed)this.ragdollPedestrian(directPed,direction,18,false);for(const p of this.pedestrians){if(p.userData.dead)continue;const dist=p.position.distanceTo(position);if(dist<7.5)this.ragdollPedestrian(p,p.position.clone().sub(position).normalize(),THREE.MathUtils.mapLinear(dist,0,7.5,15,5),false);}const obstacle=this.colliderDestructibles.get(hitCollider?.handle);if(obstacle&&!obstacle.broken){obstacle.pendingBreak=true;this.breakObstacle(obstacle,direction,this.player);}this.explosion(position,1.42);for(const o of this.opponents){const dist=o.position.distanceTo(position);if(!o.userData.dead&&dist<10){this.damageCar(o,THREE.MathUtils.mapLinear(dist,0,10,52,7),this.player);const impulse=o.position.clone().sub(position).normalize().multiplyScalar((10-dist)*165);o.userData.vehicle.body.applyImpulse({x:impulse.x,y:135,z:impulse.z},true);}}this.scene.remove(rocket);rocket.geometry.dispose();rocket.material.dispose();
+    rocket.position.copy(position);this.renderer.domElement.dataset.lastRocketImpact=directPed?'pedestrian':(hitCollider?.userData?.type||'range');const direction=rocket.userData.vel.clone().normalize(),damageScale=rocket.userData.damageScale||1;if(directPed)this.ragdollPedestrian(directPed,direction,18*damageScale,false);for(const p of this.pedestrians){if(p.userData.dead)continue;const dist=p.position.distanceTo(position);if(dist<7.5)this.ragdollPedestrian(p,p.position.clone().sub(position).normalize(),THREE.MathUtils.mapLinear(dist,0,7.5,15,5)*damageScale,false);}const obstacle=this.colliderDestructibles.get(hitCollider?.handle);if(obstacle&&!obstacle.broken){obstacle.pendingBreak=true;this.breakObstacle(obstacle,direction,this.player);}this.explosion(position,1.42*Math.min(1.2,damageScale));for(const o of this.opponents){const dist=o.position.distanceTo(position);if(!o.userData.dead&&dist<10){this.damageCar(o,THREE.MathUtils.mapLinear(dist,0,10,52,7)*damageScale,this.player);const impulse=o.position.clone().sub(position).normalize().multiplyScalar((10-dist)*165*damageScale);o.userData.vehicle.body.applyImpulse({x:impulse.x,y:135*damageScale,z:impulse.z},true);}}this.scene.remove(rocket);rocket.geometry.dispose();rocket.material.dispose();
   }
 
   checkCheckpoint(){
@@ -647,7 +670,7 @@ class WreckrunGame {
 
   updateHUD(){
     const d=this.player.userData,remaining=this.opponents.filter(o=>!o.userData.dead).length;this.hud.querySelector('[data-lap]').textContent=`${Math.min(this.level.laps,this.lap+1)}/${this.level.laps}`;this.hud.querySelector('[data-enemies]').textContent=remaining;this.hud.querySelector('[data-kills]').textContent=`${this.kills}/${this.level.quota}`;this.hud.querySelector('[data-total-damage]').textContent=money(Math.round(this.totalDamage));this.hud.querySelector('[data-run-credits]').textContent=`₡ ${money(this.runCredits)}`;this.hud.querySelector('[data-health]').textContent=Math.max(0,Math.round(d.health/d.maxHealth*100))+'%';this.hud.querySelector('[data-nitro]').textContent=Math.round(d.nitro)+'%';const sp=Math.round(Math.abs(d.speed)*3.6);this.hud.querySelector('[data-speed]').textContent=String(sp).padStart(3,'0');this.hud.querySelector('.speedo i').style.setProperty('--speed',Math.min(100,sp/2.5)+'%');this.hud.querySelector('[data-time]').textContent=formatTime(this.elapsed);
-    const weapon=WEAPONS.find(w=>w.id===save.selectedWeapon),ready=this.elapsed-this.lastShot>=weapon.cooldown;this.hud.querySelector('[data-weapon]').textContent=weapon.id==='ram'?'RAM':ready?'READY':'WAIT';
+    const machineGun=MACHINE_GUNS.find(w=>w.id===save.selectedMachineGun)||MACHINE_GUNS[0],launcher=MISSILE_LAUNCHERS.find(w=>w.id===save.selectedMissileLauncher)||MISSILE_LAUNCHERS[0],machineReady=this.elapsed-this.lastPrimaryShot>=machineGun.cooldown,missileReady=launcher.id!=='none'&&this.elapsed-this.lastMissileShot>=launcher.cooldown,missileTarget=missileReady?this.acquireMissileTarget(launcher):null;this.hud.querySelector('[data-machine-gun-status]').textContent=machineReady?'READY':'FIRE';this.hud.querySelector('[data-missile-status]').textContent=launcher.id==='none'?'EMPTY':missileReady?(missileTarget?'LOCK':'SEARCH'):'WAIT';this.hud.querySelector('.crosshair')?.classList.toggle('locked',Boolean(missileTarget));
     const playerPoint=this.minimapPoint(this.player.position.x,this.player.position.z),playerYaw=new THREE.Euler().setFromQuaternion(this.player.quaternion,'YXZ').y;if(this.mapPlayer){this.mapPlayer.style.left=playerPoint.x+'%';this.mapPlayer.style.top=playerPoint.y+'%';this.mapPlayer.style.transform=`translate(-50%,-50%) rotate(${-playerYaw}rad)`;}this.opponents.forEach((opponent,i)=>{const el=this.mapEnemies?.[i];if(!el)return;if(opponent.userData.dead){el.style.display='none';return;}const point=this.minimapPoint(opponent.position.x,opponent.position.z),yaw=new THREE.Euler().setFromQuaternion(opponent.quaternion,'YXZ').y;el.style.display='block';el.style.left=point.x+'%';el.style.top=point.y+'%';el.style.transform=`translate(-50%,-50%) rotate(${-yaw}rad)`;});this.pedestrians.forEach((pedestrian,i)=>{const el=this.mapPedestrians?.[i];if(!el)return;if(pedestrian.userData.dead){el.style.display='none';return;}const point=this.minimapPoint(pedestrian.position.x,pedestrian.position.z);el.style.display='block';el.style.left=point.x+'%';el.style.top=point.y+'%';});this.destructibles.forEach((obstacle,i)=>{const el=this.mapProps?.[i];if(el)el.style.opacity=obstacle.broken?'0':'1';});this.mapCheckpoints?.forEach((el,i)=>el?.classList.toggle('active',i===this.checkpoint));
   }
   addEvent(html){const e=document.createElement('div');e.className='event';e.innerHTML=html;this.feedEl?.prepend(e);setTimeout(()=>e.remove(),4400);while(this.feedEl?.children.length>5)this.feedEl.lastChild.remove();}
@@ -660,7 +683,7 @@ class WreckrunGame {
     modal.querySelector('[data-next]').onclick=()=>{const id=win&&this.level.id<4?this.level.id+1:this.level.id;this.destroy();showBriefing(id);};modal.querySelector('[data-garage]').onclick=()=>{this.destroy();showGarage();};modal.querySelector('[data-menu]').onclick=()=>{this.destroy();showMenu();};
   }
 
-  destroy(){if(this.destroyed)return;this.destroyed=true;cancelAnimationFrame(this.raf);removeEventListener('keydown',this.onKeyDown);removeEventListener('keyup',this.onKeyUp);removeEventListener('resize',this.onResize);this.renderer?.domElement.removeEventListener('pointerdown',this.onPointerDown);this.renderer?.domElement.removeEventListener('pointermove',this.onPointerMove);this.renderer?.domElement.removeEventListener('pointerup',this.onPointerUp);this.renderer?.domElement.removeEventListener('pointercancel',this.onPointerUp);for(const decal of this.bloodDecals||[])decal.mesh.material.dispose();this.eventQueue?.free();this.physics?.free();this.renderer?.dispose();this.renderer?.domElement.remove();this.hud?.remove();}
+  destroy(){if(this.destroyed)return;this.destroyed=true;cancelAnimationFrame(this.raf);removeEventListener('keydown',this.onKeyDown);removeEventListener('keyup',this.onKeyUp);removeEventListener('resize',this.onResize);this.renderer?.domElement.removeEventListener('pointerdown',this.onPointerDown);this.renderer?.domElement.removeEventListener('pointermove',this.onPointerMove);this.renderer?.domElement.removeEventListener('pointerup',this.onPointerUp);this.renderer?.domElement.removeEventListener('pointercancel',this.onPointerCancel);this.renderer?.domElement.removeEventListener('contextmenu',this.onContextMenu);for(const decal of this.bloodDecals||[])decal.mesh.material.dispose();this.eventQueue?.free();this.physics?.free();this.renderer?.dispose();this.renderer?.domElement.remove();this.hud?.remove();}
 }
 
 function getPreviewModels(renderer) {
