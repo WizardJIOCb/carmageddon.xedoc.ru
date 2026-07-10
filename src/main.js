@@ -352,7 +352,7 @@ class WreckrunGame {
       const tactics=['hunter','ambusher','bully','racer','coward'],tactic=tactics[i%tactics.length];Object.assign(ai.userData,{vehicle,body:visual.body,wheels:visual.wheels,speed:0,health:70+this.level.id*14+base.armor*25,maxHealth:70+this.level.id*14+base.armor*25,maxSpeed:vehicle.maxSpeed,handling:base.handling,target:(startIndex+1)%this.waypoints.length,aggression:.25+Math.random()*.7,tactic,combatState:'race',stateTimer:1+Math.random()*3,ramCooldown:2+Math.random()*4,escapePoint:null,approachSide:i%2?1:-1,stuckTimer:0,recoverTimer:0,dead:false,lastImpact:-10,name:['Crusher','Widow','Butcher','Chrome Jack','Hex','Mortis','Road Wolf','Buzzard'][i]});
       this.colliderVehicles.set(vehicle.collider.handle,ai);this.opponents.push(ai);
     }
-    for(let i=0;i<this.level.peds;i++){const ped=this.createPedestrian(i);if(i<4){ped.position.copy(this.waypoints[0]).lerp(this.waypoints[1],.13+i*.075);ped.position.x+=(i%2?1:-1)*2.3;ped.position.y=.05;}else this.placePedestrianSafely(ped);this.scene.add(ped);this.pedestrians.push(ped);}
+    for(let i=0;i<this.level.peds;i++){const ped=this.createPedestrian(i);if(i<4){ped.position.copy(this.waypoints[0]).lerp(this.waypoints[1],.13+i*.075);ped.position.x+=(i%2?1:-1)*2.3;ped.position.y=.05;if(this.isPedestrianBlocked(ped.position,.55))this.placePedestrianSafely(ped);}else this.placePedestrianSafely(ped);this.scene.add(ped);this.pedestrians.push(ped);}
   }
 
   createCar(color,shape,isPlayer){
@@ -360,7 +360,7 @@ class WreckrunGame {
   }
 
   createPedestrian(i){
-    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,phase:Math.random()*10,runSpeed:4.4+Math.random()*2.2,swerve:Math.random()<.5?-1:1,fleeDirection:new THREE.Vector3(0,0,1),fleeThreat:null,threatLock:0,model:person.model,mixer:person.mixer,idle:person.idle,run:person.run,hips:person.hips,hipsBasePosition:person.hipsBasePosition,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
+    const person=this.models.createPerson(i),g=new THREE.Group();g.add(person.model);g.userData={dead:false,panic:0,running:false,phase:Math.random()*10,runSpeed:4.4+Math.random()*2.2,swerve:Math.random()<.5?-1:1,fleeDirection:new THREE.Vector3(),fleeThreat:null,threatLock:0,model:person.model,mixer:person.mixer,idle:person.idle,run:person.run,hips:person.hips,hipsBasePosition:person.hipsBasePosition,skin:[0xd99a78,0x8a5a42,0xf0bd91][i%3],cloth:[0xbab599,0x1e6b72,0x863328,0x41404d][i%4]};return g;
   }
 
   placePedestrianSafely(ped){for(let attempt=0;attempt<28;attempt++){const a=Math.random()*Math.PI*2,r=18+Math.random()*60,candidate=new THREE.Vector3(Math.cos(a)*r,.05,Math.sin(a)*r);if(!this.isPedestrianBlocked(candidate,.55)){ped.position.copy(candidate);return;}}ped.position.set((Math.random()-.5)*30,.05,(Math.random()-.5)*24);}
@@ -441,14 +441,14 @@ class WreckrunGame {
   }
 
   movePedestrian(p,direction,speed,dt){
-    const step=speed*dt,side=p.userData.swerve||1,candidates=[direction.clone(),direction.clone().applyAxisAngle(_up,side*.55),direction.clone().applyAxisAngle(_up,-side*.55),direction.clone().applyAxisAngle(_up,side*1.08)];
+    const step=speed*dt,side=p.userData.swerve||1,angles=[0,side*.55,-side*.55,side*1.08,-side*1.08,side*1.55,-side*1.55],candidates=angles.map(angle=>direction.clone().applyAxisAngle(_up,angle));
     for(const candidateDirection of candidates){const candidate=p.position.clone().addScaledVector(candidateDirection,step);if(this.isPedestrianBlocked(candidate,.52))continue;p.position.copy(candidate);const targetYaw=Math.atan2(candidateDirection.x,candidateDirection.z);p.rotation.y+=angleDelta(p.rotation.y,targetYaw)*Math.min(1,dt*8);return;}
     p.userData.swerve*=-1;
   }
 
   updatePedestrians(dt){
     const threats=[this.player,...this.opponents.filter(ai=>!ai.userData.dead)];for(const p of this.pedestrians){if(p.userData.dead)continue;let nearest=this.player,nearestDistance=Infinity;for(const car of threats){const d=p.position.distanceTo(car.position);if(d<nearestDistance){nearestDistance=d;nearest=car;}}const data=p.userData;data.threatLock=Math.max(0,data.threatLock-dt);const lockedDistance=data.fleeThreat?.position?p.position.distanceTo(data.fleeThreat.position):Infinity;if(!data.fleeThreat||data.threatLock<=0&&(!threats.includes(data.fleeThreat)||nearestDistance<lockedDistance*.78||lockedDistance>25)){data.fleeThreat=nearest;data.threatLock=.38;}const threat=data.fleeThreat||nearest,running=data.running?nearestDistance<PEDESTRIAN_SAFE_DISTANCE:nearestDistance<PEDESTRIAN_FLEE_DISTANCE;data.phase+=dt*(running?8:1);if(running!==data.running){data.running=running;if(running){data.idle.fadeOut(.12);data.run.enabled=true;data.run.reset().setEffectiveWeight(1).setEffectiveTimeScale(.98+Math.random()*.16).fadeIn(.12).play();}else{data.run.fadeOut(.12);data.idle.enabled=true;data.idle.reset().setEffectiveWeight(1).fadeIn(.12).play();}}if(running&&!data.run.isRunning())data.run.reset().play();if(!running&&!data.idle.isRunning())data.idle.reset().play();data.mixer.update(dt);if(data.hips&&data.hipsBasePosition)data.hips.position.copy(data.hipsBasePosition);
-      if(running){const away=p.position.clone().sub(threat.position).setY(0);if(away.lengthSq()<.01)away.set(Math.random()-.5,0,Math.random()-.5);away.normalize();const side=new THREE.Vector3(-away.z,0,away.x).multiplyScalar(Math.sin(data.phase)*.24*data.swerve),desired=away.add(side).normalize();if(data.fleeDirection.lengthSq()<.01)data.fleeDirection.copy(desired);data.fleeDirection.lerp(desired,1-Math.exp(-dt*5.5)).normalize();const speed=data.runSpeed*(nearestDistance<7?1.28:1);this.movePedestrian(p,data.fleeDirection,speed,dt);}else p.rotation.y+=Math.sin(data.phase*.45)*dt*.06;
+      if(running){const away=p.position.clone().sub(threat.position).setY(0);if(away.lengthSq()<.01)away.set(Math.random()-.5,0,Math.random()-.5);away.normalize();const side=new THREE.Vector3(-away.z,0,away.x).multiplyScalar(Math.sin(data.phase)*.24*data.swerve),desired=away.add(side).normalize();if(data.fleeDirection.lengthSq()<.01||data.fleeDirection.dot(desired)<-.35)data.fleeDirection.copy(desired);else data.fleeDirection.lerp(desired,1-Math.exp(-dt*5.5)).normalize();const speed=data.runSpeed*(nearestDistance<7?1.28:1);this.movePedestrian(p,data.fleeDirection,speed,dt);}else p.rotation.y+=Math.sin(data.phase*.45)*dt*.06;
     }
   }
 
