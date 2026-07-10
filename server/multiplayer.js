@@ -29,6 +29,9 @@ const roomSnapshot = room => ({
   humanSlots: room.slots - room.aiSlots,
   status: room.status,
   hostId: room.hostId,
+  raceNumber: room.raceNumber || 0,
+  finishedCount: room.finishedPlayers?.size || 0,
+  lastResults: room.lastResults || [],
   players: [...room.players.values()].map(player => ({ id: player.id, name: player.name, carId: player.carId, color: player.color, machineGunId:player.machineGunId, missileLauncherId:player.missileLauncherId })),
 });
 const publicRooms = () => [...rooms.values()].filter(room => room.status === 'lobby').map(roomSnapshot);
@@ -39,17 +42,24 @@ const broadcastRoom = room => {
   broadcast(room, { type: 'room', room: roomSnapshot(room) });
   for (const client of wss.clients) send(client, { type: 'rooms', rooms: publicRooms() });
 };
+const publicRoomsUpdate = () => { for (const client of wss.clients) send(client, { type: 'rooms', rooms: publicRooms() }); };
+const raceResults = room => [...(room.finishedPlayers?.values()||[])];
+const maybeCompleteRace = room => {
+  if(room.status!=='racing'||!room.players.size||![...room.players.keys()].every(id=>room.finishedPlayers?.has(id)))return false;
+  room.status='lobby';room.lastResults=raceResults(room);room.finishedPlayers=new Map();broadcast(room,{type:'race_complete',room:roomSnapshot(room),results:room.lastResults});publicRoomsUpdate();return true;
+};
 const leaveRoom = client => {
   const room = rooms.get(client.roomId);
   if (!room) return;
   room.players.delete(client.id);
+  room.finishedPlayers?.delete(client.id);
   client.roomId = null;
   if (!room.players.size) rooms.delete(room.id);
   else {
     if (room.hostId === client.id) room.hostId = room.players.keys().next().value;
-    broadcastRoom(room);
+    if(!maybeCompleteRace(room))broadcastRoom(room);
   }
-  for (const socket of wss.clients) send(socket, { type: 'rooms', rooms: publicRooms() });
+  publicRoomsUpdate();
 };
 
 wss.on('connection', socket => {
@@ -61,10 +71,10 @@ wss.on('connection', socket => {
     if (message.type === 'list') return send(socket, { type: 'rooms', rooms: publicRooms() });
     if (message.type === 'create') {
       leaveRoom(client);
-      const slots = clamp(message.slots, 2, 12), aiSlots = clamp(message.aiSlots, 0, slots - 1), room = {
+      const slots = Math.trunc(clamp(message.slots, 2, 12)), aiSlots = Math.trunc(clamp(message.aiSlots, 0, slots - 1)), room = {
         id: Math.random().toString(36).slice(2, 8).toUpperCase(),
         name: String(message.roomName || 'Бойня').trim().slice(0, 28) || 'Бойня',
-        levelId: clamp(message.levelId, 0, 9), slots, aiSlots, status: 'lobby', hostId: client.id, players: new Map(),
+        levelId: clamp(message.levelId, 0, 9), slots, aiSlots, status: 'lobby', hostId: client.id, players: new Map(), raceNumber:0, finishedPlayers:new Map(), lastResults:[],
       };
       room.players.set(client.id, playerRecord(message,socket,client.id));
       rooms.set(room.id, room);client.roomId = room.id;broadcastRoom(room);return;
@@ -78,11 +88,13 @@ wss.on('connection', socket => {
     }
     const room = rooms.get(client.roomId);if (!room) return;
     if (message.type === 'configure' && room.hostId === client.id && room.status === 'lobby') {
-      room.slots = clamp(message.slots, 2, 12);room.aiSlots = clamp(message.aiSlots, 0, room.slots - Math.max(1, room.players.size));room.levelId = clamp(message.levelId, 0, 9);broadcastRoom(room);return;
+      room.slots = Math.trunc(clamp(message.slots,Math.max(2,room.players.size),12));room.aiSlots = Math.trunc(clamp(message.aiSlots,0,room.slots-room.players.size));room.levelId = Math.trunc(clamp(message.levelId,0,9));broadcastRoom(room);return;
     }
     if (message.type === 'start' && room.hostId === client.id && room.status === 'lobby') {
-      room.status = 'racing';broadcast(room, { type: 'race_started', room: roomSnapshot(room) });
-      for (const other of wss.clients) send(other, { type: 'rooms', rooms: publicRooms() });return;
+      room.status = 'racing';room.raceNumber=(room.raceNumber||0)+1;room.finishedPlayers=new Map();broadcast(room, { type: 'race_started', room: roomSnapshot(room) });publicRoomsUpdate();return;
+    }
+    if(message.type==='race_finished'&&room.status==='racing'){
+      if(room.finishedPlayers.has(client.id))return;const result=message.result||{},player=room.players.get(client.id),record={playerId:client.id,name:player?.name||'Водитель',win:Boolean(result.win),reason:String(result.reason||'ЗАЕЗД ЗАВЕРШЁН').slice(0,80),time:clamp(result.time,0,86400),kills:clamp(result.kills,0,9999),wrecks:clamp(result.wrecks,0,9999),damage:clamp(result.damage,0,10000000),reward:clamp(result.reward,0,10000000)};room.finishedPlayers.set(client.id,record);broadcast(room,{type:'race_progress',finished:room.finishedPlayers.size,total:room.players.size,results:raceResults(room)});maybeCompleteRace(room);return;
     }
     if (message.type === 'state' && room.status === 'racing') {
       const state = message.state;if (!state || !Array.isArray(state.position) || !Array.isArray(state.quaternion)) return;
