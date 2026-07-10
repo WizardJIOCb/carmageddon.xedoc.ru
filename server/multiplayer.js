@@ -15,6 +15,7 @@ const normalizeColor = value => /^#[0-9a-f]{6}$/i.test(value) ? value : '#d5ff18
 const normalizeWeapon = (value, allowed, fallback) => allowed.has(value) ? value : fallback;
 const vector = value => Array.isArray(value) && value.length >= 3 && value.slice(0,3).every(Number.isFinite) ? value.slice(0,3).map(number => clamp(number,-5000,5000)) : null;
 const quaternion = value => Array.isArray(value) && value.length >= 4 && value.slice(0,4).every(Number.isFinite) ? value.slice(0,4).map(number => clamp(number,-1,1)) : null;
+const worldEvent = event => { const kind=String(event?.kind||''),index=Math.trunc(clamp(event?.index,0,511)),direction=vector(event?.direction);if(!['destructible_break','pedestrian_hit'].includes(kind)||!direction)return null;return{kind,index,direction,strength:clamp(event?.strength,0,30)}; };
 const playerRecord = (message, socket, id) => ({ id, name:String(message.playerName||'Водитель').slice(0,20), carId:normalizeCar(message.carId), color:normalizeColor(message.color), machineGunId:normalizeWeapon(message.machineGunId,machineGunIds,'scrapgun'), missileLauncherId:normalizeWeapon(message.missileLauncherId,missileLauncherIds,'none'), socket });
 const send = (socket, payload) => {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
@@ -91,6 +92,11 @@ wss.on('connection', socket => {
     if (message.type === 'ai_state' && room.status === 'racing' && room.hostId === client.id) {
       if (!Array.isArray(message.states)) return;const states=message.states.slice(0,room.aiSlots).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,speed:clamp(state.speed,-150,150),health:clamp(state.health,0,100000),maxHealth:clamp(state.maxHealth,1,100000),dead:Boolean(state.dead)};}).filter(Boolean);broadcast(room,{type:'ai_state',states},socket);return;
     }
+    if (message.type === 'world_state' && room.status === 'racing' && room.hostId === client.id) {
+      if(!Array.isArray(message.pedestrians))return;const pedestrians=message.pedestrians.slice(0,128).map((state,index)=>{const position=vector(state?.position);if(!position)return null;return{index,position,rotationY:clamp(state.rotationY,-Math.PI*4,Math.PI*4),running:Boolean(state.running),dead:Boolean(state.dead)};}).filter(Boolean),destructibles=Array.isArray(message.destructibles)?message.destructibles.slice(0,512).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,broken:Boolean(state.broken)};}).filter(Boolean):[],broken=Array.isArray(message.broken)?message.broken.slice(0,512).map(value=>Math.trunc(clamp(value,0,511))):[];broadcast(room,{type:'world_state',pedestrians,destructibles,broken},socket);return;
+    }
+    if (message.type === 'world_event' && room.status === 'racing' && room.hostId === client.id) {const event=worldEvent(message.event);if(event)broadcast(room,{type:'world_event',event},socket);return;}
+    if (message.type === 'world_interaction' && room.status === 'racing' && room.hostId !== client.id) {const event=worldEvent(message.event),host=room.players.get(room.hostId);if(event&&host)send(host.socket,{type:'world_interaction',playerId:client.id,event});return;}
     if (message.type === 'combat' && room.status === 'racing') {
       const event=message.event,kind=String(event?.kind||'');if(!combatKinds.has(kind))return;
       const now=Date.now(),minimumDelay=kind==='machine_gun'||kind==='ai_damage'?35:90;if(now-(client.lastCombatAt?.[kind]||0)<minimumDelay)return;client.lastCombatAt={...(client.lastCombatAt||{}),[kind]:now};
