@@ -7,7 +7,7 @@ const rooms = new Map();
 const carIds = new Set(['razor','marauder','brutus','mantis','hearse','phantom']);
 const machineGunIds = new Set(['scrapgun','vulcan','shredder']);
 const missileLauncherIds = new Set(['none','sidewinder','reaper']);
-const combatKinds = new Set(['machine_gun','missile_launch','missile_explode']);
+const combatKinds = new Set(['machine_gun','missile_launch','missile_explode','vehicle_impact']);
 
 const clamp = (value, min, max) => { const number=Number(value);return Math.max(min,Math.min(max,Number.isFinite(number)?number:min)); };
 const normalizeCar = value => carIds.has(value) ? value : 'razor';
@@ -92,6 +92,7 @@ wss.on('connection', socket => {
       const now=Date.now(),minimumDelay=kind==='machine_gun'?35:90;if(now-(client.lastCombatAt?.[kind]||0)<minimumDelay)return;client.lastCombatAt={...(client.lastCombatAt||{}),[kind]:now};
       if(kind==='machine_gun'){const origin=vector(event.origin),impact=vector(event.impact);if(!origin||!impact)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,origin,impact,color:clamp(event.color,0,0xffffff),hit:Boolean(event.hit)}},socket);return;}
       if(kind==='missile_launch'){const origin=vector(event.origin),direction=vector(event.direction);if(!origin||!direction)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,id:String(event.id||'').slice(0,48),origin,direction,speed:clamp(event.speed,10,140),turnRate:clamp(event.turnRate,0,12),life:clamp(event.life,.2,6),targetIndex:clamp(event.targetIndex,-1,99)}},socket);return;}
+      if(kind==='vehicle_impact'){const targetId=String(event.targetId||''),impactId=String(event.impactId||'').slice(0,64),position=vector(event.position),direction=vector(event.direction),impulse=vector(event.impulse);if(!room.players.has(targetId)||targetId===client.id||!impactId||!position||!direction||!impulse)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,targetId,impactId,position,direction,impulse,damage:clamp(event.damage,0,30)}},socket);return;}
       const position=vector(event.position);if(!position)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,id:String(event.id||'').slice(0,48),position,intensity:clamp(event.intensity,.25,2.5)}},socket);
     }
   });
