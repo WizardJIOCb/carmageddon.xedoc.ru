@@ -311,14 +311,18 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   joint('thighR', 'shinR', 'RightLeg');
 
   const rootStartPosition = model.position.clone();
+  const rootStartQuaternion = model.quaternion.clone();
   const pelvisStartWorld = byName.pelvis?.bone.getWorldPosition(new THREE.Vector3()) || rootStartPosition.clone();
+  const pelvisRootOffset = pelvisStartWorld.clone().sub(rootStartPosition);
+  const tumble = new THREE.Vector3(impulse.z, 0, -impulse.x);
+  if (tumble.lengthSq() > .001) tumble.normalize().multiplyScalar(2.15);
 
   pieces.forEach((piece, index) => {
     const launch = .72 + (index % 3) * .015;
     piece.body.setLinvel({ x: impulse.x * launch, y: impulse.y * launch, z: impulse.z * launch }, true);
-    piece.body.setAngvel({ x: (Math.random() - .5) * 1.5, y: (Math.random() - .5) * .7, z: (Math.random() - .5) * 1.5 }, true);
+    piece.body.setAngvel({ x: tumble.x + (Math.random() - .5) * .32, y: tumble.y + (Math.random() - .5) * .22, z: tumble.z + (Math.random() - .5) * .32 }, true);
   });
-  return { skinned: true, model, pieces, rootStartPosition, pelvisStartWorld };
+  return { skinned: true, model, pieces, rootStartPosition, rootStartQuaternion, pelvisStartWorld, pelvisRootOffset };
 }
 
 export function syncRagdoll(ragdoll) {
@@ -329,7 +333,9 @@ export function syncRagdoll(ragdoll) {
       const r = pelvis.body.rotation();
       const rotation = new THREE.Quaternion(r.x, r.y, r.z, r.w);
       const pelvisWorld = pelvis.boneOffset.clone().applyQuaternion(rotation).add(new THREE.Vector3(p.x, p.y, p.z));
-      ragdoll.model.position.copy(ragdoll.rootStartPosition).add(pelvisWorld).sub(ragdoll.pelvisStartWorld);
+      const pelvisDelta = rotation.clone().multiply(pelvis.bodyRotation.clone().invert());
+      ragdoll.model.quaternion.copy(pelvisDelta).multiply(ragdoll.rootStartQuaternion);
+      ragdoll.model.position.copy(pelvisWorld).sub(ragdoll.pelvisRootOffset.clone().applyQuaternion(pelvisDelta));
     }
     ragdoll.model.updateMatrixWorld(true);
     const pelvisPosition = pelvis ? new THREE.Vector3(pelvis.body.translation().x, pelvis.body.translation().y, pelvis.body.translation().z) : null;
