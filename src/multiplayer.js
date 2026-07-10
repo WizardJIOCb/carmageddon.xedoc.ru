@@ -21,6 +21,6 @@ export class MultiplayerClient {
   }
 
   on(type, handler) { const handlers=this.handlers.get(type)||[];handlers.push(handler);this.handlers.set(type,handlers);return()=>this.handlers.set(type,(this.handlers.get(type)||[]).filter(item=>item!==handler)); }
-  send(type, payload={}) { if(this.socket?.readyState===WebSocket.OPEN)this.socket.send(JSON.stringify({type,...payload})); }
+  send(type, payload={}) { if(this.socket?.readyState===WebSocket.OPEN)this.socket.send(JSON.stringify({type,...((type==='create'||type==='join')?this.loadout:{}),...payload})); }
   close() { this.socket?.close();this.handlers.clear(); }
 }
