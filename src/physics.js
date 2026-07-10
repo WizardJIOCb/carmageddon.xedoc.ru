@@ -283,7 +283,7 @@ export function createRagdoll(world, scene, position, impulse, colors, model = n
     const mesh = new THREE.Mesh(geometry, def.material);
     mesh.castShadow = true;
     scene.add(mesh);
-    const piece = { body, mesh, name: def.name, center: new THREE.Vector3(...def.pos), born: performance.now() };
+    const piece = { body, collider, mesh, name: def.name, center: new THREE.Vector3(...def.pos), born: performance.now() };
     collider.userData={type:'ragdoll',piece,bloodState:pieces.bloodState||(pieces.bloodState={lastImpact:-10})};
     pieces.push(piece);
     byName[def.name] = piece;
