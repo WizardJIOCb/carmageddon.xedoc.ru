@@ -401,9 +401,15 @@ class WreckrunGame {
     const body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(x,1.5,z)),mass=0,collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(1.48,.22).setSensor(true).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS),body),obstacle={visual,body,collider,type:'pole',networkIndex:this.destructibles.length,networkPosition:visual.position.clone(),networkQuaternion:visual.quaternion.clone(),networkStateReceived:false,size:new THREE.Vector3(.44,3,.44),mass,health:1,breakForce:0,lastImpact:-10,broken:false,pendingBreak:false};collider.userData={type:'destructible',obstacle};this.destructibles.push(obstacle);this.colliderDestructibles.set(collider.handle,obstacle);
   }
 
+  multiplayerSpawn(index){
+    const direction=this.waypoints[1].clone().sub(this.waypoints[0]).setY(0).normalize(),side=new THREE.Vector3(-direction.z,0,direction.x),row=Math.floor(index/2),lane=index%2===0?-1:1,position=this.waypoints[0].clone().addScaledVector(direction,-7.5-row*6.2).addScaledVector(side,lane*3.4);
+    position.y=1.4;return{position,yaw:Math.atan2(direction.x,direction.z)};
+  }
+
   setupActors(){
     const car=currentCar(),up=upgrades();
-    const dims=carDimensions(car),startDirection=this.waypoints[1].clone().sub(this.waypoints[0]).setY(0).normalize(),start=this.waypoints[0].clone().addScaledVector(startDirection,-6);start.y=1.05;const startYaw=Math.atan2(startDirection.x,startDirection.z);
+    const dims=carDimensions(car),startDirection=this.waypoints[1].clone().sub(this.waypoints[0]).setY(0).normalize(),singlePlayerStart=this.waypoints[0].clone().addScaledVector(startDirection,-6);singlePlayerStart.y=1.05;
+    const playerIndex=this.multiplayer?.room.players.findIndex(player=>player.id===this.multiplayer.playerId)??-1,multiplayerStart=this.multiplayerSpawn(Math.max(0,playerIndex)),start=this.multiplayer?multiplayerStart.position:singlePlayerStart,startYaw=this.multiplayer?multiplayerStart.yaw:Math.atan2(startDirection.x,startDirection.z);
     const playerVisual=this.models.createCarVisual(car.id,save.color,dims);this.player=playerVisual.group;this.scene.add(this.player);
     this.boostLight=new THREE.PointLight(0xff5a16,0,9,2);this.scene.add(this.boostLight);
     const playerVehicle=createVehicle(this.physics,playerVisual,{...dims,position:start,yaw:startYaw,mass:980*car.armor,maxSpeed:36*car.speed+up.engine*2.2,engineForce:6800*car.speed+up.engine*620});
@@ -422,10 +428,10 @@ class WreckrunGame {
 
   setupMultiplayer(){
     if(!this.multiplayer)return;
-    const {client,room,playerId}=this.multiplayer,startDirection=this.waypoints[1].clone().sub(this.waypoints[0]).setY(0).normalize(),side=new THREE.Vector3(-startDirection.z,0,startDirection.x);
-    room.players.filter(player=>player.id!==playerId).forEach((player,index)=>{
+    const {client,room,playerId}=this.multiplayer;
+    room.players.filter(player=>player.id!==playerId).forEach(player=>{
       const car=CARS.find(item=>item.id===player.carId)||CARS[0],dimensions=carDimensions(car),visual=this.models.createCarVisual(car.id,player.color||'#ffffff',dimensions),group=visual.group;
-      group.position.copy(this.waypoints[0]).addScaledVector(startDirection,-9-index*3).addScaledVector(side,(index%2?1:-1)*(3+Math.floor(index/2)*2));group.position.y=1.05;group.rotation.y=Math.atan2(startDirection.x,startDirection.z);group.userData.remoteName=player.name;this.scene.add(group);
+      const playerIndex=room.players.findIndex(item=>item.id===player.id),spawn=this.multiplayerSpawn(Math.max(0,playerIndex));group.position.copy(spawn.position);group.rotation.y=spawn.yaw;group.userData.remoteName=player.name;this.scene.add(group);
       const body=this.physics.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(group.position.x,group.position.y,group.position.z).setRotation({x:group.quaternion.x,y:group.quaternion.y,z:group.quaternion.z,w:group.quaternion.w}).setCcdEnabled(true).setCanSleep(false));
       const collider=this.physics.createCollider(RAPIER.ColliderDesc.roundCuboid(dimensions.width*.48,dimensions.height*.34,dimensions.length*.47,.1).setTranslation(0,.1,0).setFriction(1.08).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max).setRestitution(.035).setCollisionGroups(0x00040007).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS|RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(1800),body);
       const remote={...player,car,dimensions,mass:980*car.armor,group,wheels:visual.wheels,body,collider,targetPosition:group.position.clone(),targetQuaternion:group.quaternion.clone(),speed:0,steer:0,displaySteer:0,wheelSpin:0,health:100,maxHealth:100,nitro:100,kills:0,wrecks:0,damage:0,lap:0,checkpoint:0,boosting:false,boostEmit:0,dead:false};
