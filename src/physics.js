@@ -139,7 +139,8 @@ export function syncVehicle(vehicle) {
   vehicle.visual.group.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
   vehicle.visual.wheels.forEach((pivot, index) => {
     const length = vehicle.controller.wheelSuspensionLength(index);
-    if (length != null) pivot.position.y = pivot.userData.baseY - (length - .38) / (pivot.userData.modelScale || 1);
+    const modelScale=pivot.userData.modelScale||1;
+    if (length != null) pivot.position.y = pivot.userData.baseY - (length - .38 + .065) / modelScale;
     pivot.rotation.y = (pivot.userData.baseRotationY || 0) + (index >= 2 ? vehicle.steer : 0);
     const rolling = pivot.userData.rollingMesh;
     if (rolling) rolling.rotation.x = (pivot.userData.baseRollX || 0) + (vehicle.controller.wheelRotation(index) || 0);
@@ -191,11 +192,12 @@ export function createRagdoll(world, scene, position, impulse, colors, model = n
       colliderDesc = RAPIER.ColliderDesc.capsule(def.half, def.radius);
       geometry = new THREE.CapsuleGeometry(def.radius, def.half * 2, 5, 10);
     }
-    world.createCollider(colliderDesc.setMass(def.mass).setFriction(.22).setRestitution(.035).setCollisionGroups(0x00020005), body);
+    const collider=world.createCollider(colliderDesc.setMass(def.mass).setFriction(.22).setRestitution(.035).setCollisionGroups(0x00020005), body);
     const mesh = new THREE.Mesh(geometry, def.material);
     mesh.castShadow = true;
     scene.add(mesh);
     const piece = { body, mesh, name: def.name, center: new THREE.Vector3(...def.pos), born: performance.now() };
+    collider.userData={type:'ragdoll',piece,bloodState:pieces.bloodState||(pieces.bloodState={lastImpact:-10})};
     pieces.push(piece);
     byName[def.name] = piece;
     body.applyImpulse({ x: impulse.x * (1 + index * .025), y: impulse.y + Math.random() * 2, z: impulse.z * (1 + index * .025) }, true);
@@ -265,7 +267,7 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
         .setAngularDamping(def.name === 'head' ? 1.35 : (def.name === 'pelvis' || def.name === 'torso' ? .92 : .68))
         .setCcdEnabled(true),
     );
-    world.createCollider(
+    const collider=world.createCollider(
       colliderDesc
         .setMass(def.mass)
         .setFriction(.66)
@@ -286,7 +288,9 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
       localQuaternion: bone.quaternion.clone(),
       localScale: bone.scale.clone(),
       mass: def.mass,
+      collider,
     };
+    collider.userData={type:'ragdoll',piece,bloodState:pieces.bloodState||(pieces.bloodState={lastImpact:-10})};
     pieces.push(piece);
     byName[def.name] = piece;
   });
