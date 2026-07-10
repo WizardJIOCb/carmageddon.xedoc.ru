@@ -36,12 +36,22 @@ export function createArenaColliders(world) {
 
 export function createVehicle(world, visual, options) {
   const yaw = options.yaw || 0;
+  const halfWidth = options.width * .48;
+  const halfHeight = options.height * .34;
+  const halfLength = options.length * .47;
+  const mass = options.mass;
+  const inertiaScale = 1.12;
+  const principalInertia = {
+    x: mass * (halfHeight * halfHeight + halfLength * halfLength) / 3 * inertiaScale,
+    y: mass * (halfWidth * halfWidth + halfLength * halfLength) / 3,
+    z: mass * (halfWidth * halfWidth + halfHeight * halfHeight) / 3 * inertiaScale,
+  };
   const body = world.createRigidBody(
     RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(options.position.x, options.position.y, options.position.z)
       .setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) })
       .setLinearDamping(.12)
-      .setAngularDamping(.62)
+      .setAngularDamping(.88)
       .setCcdEnabled(true)
       .setCanSleep(false),
   );
@@ -49,12 +59,12 @@ export function createVehicle(world, visual, options) {
   body.setEnabledRotations(true, true, true, true);
 
   const collider = world.createCollider(
-    RAPIER.ColliderDesc.roundCuboid(options.width * .48, options.height * .34, options.length * .47, .1)
+    RAPIER.ColliderDesc.roundCuboid(halfWidth, halfHeight, halfLength, .1)
       .setTranslation(0, .1, 0)
       .setFriction(1.08)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
       .setRestitution(.035)
-      .setMass(options.mass)
+      .setMassProperties(mass, { x: 0, y: -Math.min(.22, options.height * .22), z: 0 }, principalInertia, { x: 0, y: 0, z: 0, w: 1 })
       .setCollisionGroups(0x00040007)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
       .setContactForceEventThreshold(1800),
@@ -98,6 +108,8 @@ export function createVehicle(world, visual, options) {
     maxSpeed: options.maxSpeed,
     engineForce: options.engineForce,
     reverseForce: options.engineForce * .62,
+    tiltTime: 0,
+    rightingCount: 0,
   };
   collider.userData = { type: 'vehicle', vehicle };
   return vehicle;
@@ -118,6 +130,10 @@ export function driveVehicle(vehicle, input, dt) {
   engine *= vehicle.throttle * (1 - speedRatio * .72);
   if (input.boost) engine *= 1.62;
   if (Math.abs(speed) > vehicle.maxSpeed * (input.boost ? 1.28 : 1) && Math.sign(engine) === Math.sign(speed)) engine = 0;
+  const bodyRotation = body.rotation();
+  const bodyQuaternion = _quat.set(bodyRotation.x, bodyRotation.y, bodyRotation.z, bodyRotation.w);
+  const uprightDot = _vehicleUp.set(0, 1, 0).applyQuaternion(bodyQuaternion).y;
+  if (uprightDot < .58) engine *= .18;
 
   for (let i = 0; i < 4; i++) {
     controller.setWheelEngineForce(i, engine * (i < 2 ? .58 : .42));
@@ -130,6 +146,60 @@ export function driveVehicle(vehicle, input, dt) {
   // Aerodynamic stability: downforce grows with speed without cancelling impacts.
   const downforce = Math.min(22000, speed * speed * 20);
   body.applyImpulse({ x: 0, y: -downforce * dt, z: 0 }, true);
+  stabilizeVehicle(vehicle, dt, uprightDot);
+}
+
+function stabilizeVehicle(vehicle, dt, uprightDot) {
+  const { body, controller } = vehicle;
+  const rotation = body.rotation();
+  const quaternion = _stabilityQuat.set(rotation.x, rotation.y, rotation.z, rotation.w);
+  const up = _stabilityUp.set(0, 1, 0).applyQuaternion(quaternion);
+  const linear = body.linvel();
+  const angular = body.angvel();
+  const horizontalSpeed = Math.hypot(linear.x, linear.z);
+  let groundedWheels = 0;
+  for (let i = 0; i < 4; i++) if (controller.wheelIsInContact(i)) groundedWheels++;
+
+  const badlyTilted = uprightDot < .62;
+  vehicle.tiltTime = badlyTilted && horizontalSpeed < 4.5
+    ? vehicle.tiltTime + dt
+    : Math.max(0, vehicle.tiltTime - dt * 2.5);
+
+  // A mild suspension-like stabilizer removes the tendency to balance on two wheels,
+  // but only while wheels are actually touching the ground.
+  if (groundedWheels >= 2 && uprightDot > .42 && uprightDot < .995) {
+    const correction = _stabilityAxis.copy(up).cross(_worldUp);
+    const mass = vehicle.dimensions.mass;
+    correction.multiplyScalar(mass * 2.15 * dt);
+    correction.x -= angular.x * mass * .16 * dt;
+    correction.z -= angular.z * mass * .16 * dt;
+    body.applyTorqueImpulse({ x: correction.x, y: 0, z: correction.z }, true);
+  }
+
+  // If the chassis is resting on its nose, tail, or side, progressively help it back.
+  if (vehicle.tiltTime > .38) {
+    const correction = _stabilityAxis.copy(up).cross(_worldUp);
+    const mass = vehicle.dimensions.mass;
+    correction.multiplyScalar(mass * 8.5 * dt);
+    correction.x -= angular.x * mass * .42 * dt;
+    correction.z -= angular.z * mass * .42 * dt;
+    body.applyTorqueImpulse({ x: correction.x, y: 0, z: correction.z }, true);
+  }
+
+  // Last-resort recovery prevents an AI car from balancing forever after a pile-up.
+  if (vehicle.tiltTime > 1.45 && horizontalSpeed < 2.6) {
+    const forward = _stabilityForward.set(0, 0, 1).applyQuaternion(quaternion).setY(0);
+    if (forward.lengthSq() < .01) forward.set(0, 0, 1);
+    forward.normalize();
+    const yaw = Math.atan2(forward.x, forward.z);
+    const position = body.translation();
+    body.setTranslation({ x: position.x, y: Math.max(position.y, 1.08), z: position.z }, true);
+    body.setRotation({ x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }, true);
+    body.setLinvel({ x: linear.x * .35, y: Math.max(0, linear.y), z: linear.z * .35 }, true);
+    body.setAngvel({ x: 0, y: angular.y * .2, z: 0 }, true);
+    vehicle.tiltTime = 0;
+    vehicle.rightingCount++;
+  }
 }
 
 export function syncVehicle(vehicle) {
@@ -401,4 +471,10 @@ export function syncRagdoll(ragdoll) {
 }
 
 const _quat = new THREE.Quaternion();
+const _stabilityQuat = new THREE.Quaternion();
+const _vehicleUp = new THREE.Vector3();
+const _stabilityUp = new THREE.Vector3();
+const _stabilityAxis = new THREE.Vector3();
+const _stabilityForward = new THREE.Vector3();
+const _worldUp = new THREE.Vector3(0, 1, 0);
 export { RAPIER };
