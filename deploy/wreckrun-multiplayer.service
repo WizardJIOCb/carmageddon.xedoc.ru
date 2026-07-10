@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/wreckrun
 ExecStart=/usr/bin/node /opt/wreckrun/server/multiplayer.js
-Environment=MULTIPLAYER_PORT=8081
+Environment=MULTIPLAYER_PORT=3041
 Restart=always
 RestartSec=3
 User=www-data
