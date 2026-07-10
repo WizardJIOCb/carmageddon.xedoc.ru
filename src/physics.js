@@ -8,9 +8,9 @@ export function createPhysicsWorld() {
   return { world, eventQueue };
 }
 
-export function createArenaColliders(world) {
+export function createArenaColliders(world, halfSize = 130) {
   const ground = world.createCollider(
-    RAPIER.ColliderDesc.cuboid(130, .12, 130)
+    RAPIER.ColliderDesc.cuboid(halfSize, .12, halfSize)
       .setTranslation(0, -.12, 0)
       .setFriction(1.35)
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
@@ -19,8 +19,8 @@ export function createArenaColliders(world) {
   ground.userData = { type: 'ground' };
 
   const walls = [
-    [0, 3, -129, 130, 3, 1], [0, 3, 129, 130, 3, 1],
-    [-129, 3, 0, 1, 3, 130], [129, 3, 0, 1, 3, 130],
+    [0, 3, -(halfSize-1), halfSize, 3, 1], [0, 3, halfSize-1, halfSize, 3, 1],
+    [-(halfSize-1), 3, 0, 1, 3, halfSize], [halfSize-1, 3, 0, 1, 3, halfSize],
   ];
   walls.forEach(([x, y, z, hx, hy, hz]) => {
     const collider = world.createCollider(

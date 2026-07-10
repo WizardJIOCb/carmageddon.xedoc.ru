@@ -1,0 +1,16 @@
+[Unit]
+Description=WRECKRUN multiplayer WebSocket server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/wreckrun
+ExecStart=/usr/bin/node /opt/wreckrun/server/multiplayer.js
+Environment=MULTIPLAYER_PORT=8081
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
