@@ -105,6 +105,7 @@ export function createVehicle(world, visual, options) {
     steer: 0,
     throttle: 0,
     brake: 0,
+    handbrake: 0,
     maxSpeed: options.maxSpeed,
     engineForce: options.engineForce,
     reverseForce: options.engineForce * .62,
@@ -124,20 +125,25 @@ export function driveVehicle(vehicle, input, dt) {
   vehicle.steer = THREE.MathUtils.damp(vehicle.steer, targetSteer, steerSmoothing, dt);
   vehicle.throttle = THREE.MathUtils.damp(vehicle.throttle, input.throttle, 5.5, dt);
   vehicle.brake = THREE.MathUtils.damp(vehicle.brake, input.brake || 0, 10, dt);
+  vehicle.handbrake = THREE.MathUtils.damp(vehicle.handbrake, input.handbrake ? 1 : 0, input.handbrake ? 16 : 11, dt);
 
   const speedRatio = Math.min(1, Math.abs(speed) / vehicle.maxSpeed);
   let engine = vehicle.throttle >= 0 ? vehicle.engineForce : vehicle.reverseForce;
   engine *= vehicle.throttle * (1 - speedRatio * .72);
   if (input.boost) engine *= 1.62;
   if (Math.abs(speed) > vehicle.maxSpeed * (input.boost ? 1.28 : 1) && Math.sign(engine) === Math.sign(speed)) engine = 0;
+  if (vehicle.handbrake > .08) engine *= 1 - vehicle.handbrake * .24;
   const bodyRotation = body.rotation();
   const bodyQuaternion = _quat.set(bodyRotation.x, bodyRotation.y, bodyRotation.z, bodyRotation.w);
   const uprightDot = _vehicleUp.set(0, 1, 0).applyQuaternion(bodyQuaternion).y;
   if (uprightDot < .58) engine *= .18;
 
   for (let i = 0; i < 4; i++) {
+    const rearWheel = i < 2;
     controller.setWheelEngineForce(i, engine * (i < 2 ? .58 : .42));
-    controller.setWheelBrake(i, vehicle.brake * (i < 2 ? 5.5 : 7.5));
+    controller.setWheelBrake(i, vehicle.brake * (rearWheel ? 5.5 : 7.5) + (rearWheel ? vehicle.handbrake * 11.5 : 0));
+    controller.setWheelFrictionSlip(i, rearWheel ? THREE.MathUtils.lerp(3.35, 1.08, vehicle.handbrake) : 3.35);
+    controller.setWheelSideFrictionStiffness(i, rearWheel ? THREE.MathUtils.lerp(1.45, .32, vehicle.handbrake) : 1.45);
   }
   controller.setWheelSteering(2, vehicle.steer);
   controller.setWheelSteering(3, vehicle.steer);
@@ -146,6 +152,8 @@ export function driveVehicle(vehicle, input, dt) {
   // Aerodynamic stability: downforce grows with speed without cancelling impacts.
   const downforce = Math.min(22000, speed * speed * 20);
   body.applyImpulse({ x: 0, y: -downforce * dt, z: 0 }, true);
+  const driftDirection = Math.abs(vehicle.steer) > .035 ? Math.sign(vehicle.steer) : Math.sign(input.steer || 0);
+  if (vehicle.handbrake > .08 && Math.abs(speed) > 5 && driftDirection) body.applyTorqueImpulse({ x: 0, y: driftDirection * vehicle.dimensions.mass * 2.25 * vehicle.handbrake * dt, z: 0 }, true);
   stabilizeVehicle(vehicle, dt, uprightDot);
 }
 
