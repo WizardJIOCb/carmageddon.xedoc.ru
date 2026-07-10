@@ -18,6 +18,8 @@ const app = document.querySelector('#app');
 const GAME_VERSION = '0.2.0-alpha';
 const PEDESTRIAN_FLEE_DISTANCE = 22;
 const PEDESTRIAN_SAFE_DISTANCE = 30;
+const REPAIR_HEALTH_PER_SECOND = 10;
+const REPAIR_COST_PER_HEALTH = 12;
 
 const DEFAULT_SETTINGS = {
   steeringSensitivity: .72,
@@ -25,8 +27,8 @@ const DEFAULT_SETTINGS = {
   cameraSensitivity: .006,
   invertCameraX: false,
   graphics: 'high',
-  controlLayoutVersion: 2,
-  bindings: { accelerate:'KeyW', brake:'KeyS', left:'KeyA', right:'KeyD', handbrake:'Space', fire:'KeyF', nitro:'ShiftLeft', reset:'KeyR', pause:'Escape' },
+  controlLayoutVersion: 3,
+  bindings: { accelerate:'KeyW', brake:'KeyS', left:'KeyA', right:'KeyD', handbrake:'Space', fire:'KeyF', nitro:'ShiftLeft', repair:'KeyQ', reset:'KeyR', pause:'Escape' },
 };
 const GRAPHICS_PRESETS = {
   low: { label:'Низкое', pixelRatio:.72, antialias:false, shadows:false, shadowSize:512, description:'Максимальная производительность' },
@@ -45,9 +47,9 @@ const CARS = [
 ];
 
 const MACHINE_GUNS = [
-  { id:'scrapgun', name:'Scrap Gun', desc:'Надёжный одиночный пулемёт', price:0, cooldown:.16, damage:3.2, range:30, spread:.055, kick:34, color:0xffcf68 },
-  { id:'vulcan', name:'Двойной Vulcan', desc:'Высокий темп и плотный огонь', price:1800, cooldown:.095, damage:4.1, range:36, spread:.036, kick:55, color:0xffe369 },
-  { id:'shredder', name:'Shredder M8', desc:'Предельный темп и дальность', price:6200, cooldown:.058, damage:3.7, range:43, spread:.024, kick:72, color:0xfff0a8 },
+  { id:'scrapgun', name:'Scrap Gun', desc:'Надёжный одиночный пулемёт', price:0, cooldown:.16, damage:3.2, range:60, spread:.055, kick:34, color:0xffcf68 },
+  { id:'vulcan', name:'Двойной Vulcan', desc:'Высокий темп и плотный огонь', price:1800, cooldown:.095, damage:4.1, range:72, spread:.036, kick:55, color:0xffe369 },
+  { id:'shredder', name:'Shredder M8', desc:'Предельный темп и дальность', price:6200, cooldown:.058, damage:3.7, range:86, spread:.024, kick:72, color:0xfff0a8 },
 ];
 const MISSILE_LAUNCHERS = [
   { id:'none', name:'Без ракет', desc:'Второй слот свободен', price:0, cooldown:0, speed:0, turnRate:0, lockRange:0, damageScale:0 },
@@ -125,11 +127,11 @@ function loadSave() {
   catch { return structuredClone(DEFAULT_SAVE); }
 }
 function persist() { localStorage.setItem('wreckrun-save', JSON.stringify(save)); }
-function loadSettings(){try{const stored=JSON.parse(localStorage.getItem('wreckrun-settings')||'{}'),loaded={...structuredClone(DEFAULT_SETTINGS),...stored,bindings:{...DEFAULT_SETTINGS.bindings,...(stored.bindings||{})}};if((stored.controlLayoutVersion||0)<DEFAULT_SETTINGS.controlLayoutVersion){loaded.bindings.handbrake='Space';loaded.bindings.fire='KeyF';loaded.controlLayoutVersion=DEFAULT_SETTINGS.controlLayoutVersion;localStorage.setItem('wreckrun-settings',JSON.stringify(loaded));}return loaded;}catch{return structuredClone(DEFAULT_SETTINGS);}}
+function loadSettings(){try{const stored=JSON.parse(localStorage.getItem('wreckrun-settings')||'{}'),version=stored.controlLayoutVersion||0,loaded={...structuredClone(DEFAULT_SETTINGS),...stored,bindings:{...DEFAULT_SETTINGS.bindings,...(stored.bindings||{})}};if(version<2){loaded.bindings.handbrake='Space';loaded.bindings.fire='KeyF';}if(version<3)loaded.bindings.repair='KeyQ';if(version<DEFAULT_SETTINGS.controlLayoutVersion){loaded.controlLayoutVersion=DEFAULT_SETTINGS.controlLayoutVersion;localStorage.setItem('wreckrun-settings',JSON.stringify(loaded));}return loaded;}catch{return structuredClone(DEFAULT_SETTINGS);}}
 function persistSettings(){localStorage.setItem('wreckrun-settings',JSON.stringify(settings));}
 function graphicsPreset(){return GRAPHICS_PRESETS[settings.graphics]||GRAPHICS_PRESETS.high;}
 function keyLabel(code){return({Space:'ПРОБЕЛ',ShiftLeft:'ЛЕВЫЙ SHIFT',ShiftRight:'ПРАВЫЙ SHIFT',Escape:'ESC',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',ControlLeft:'ЛЕВЫЙ CTRL',ControlRight:'ПРАВЫЙ CTRL'}[code]||code.replace(/^Key/,'').replace(/^Digit/,''));}
-function money(n) { return new Intl.NumberFormat('ru-RU').format(n); }
+function money(n) { return new Intl.NumberFormat('ru-RU').format(Math.floor(Number(n)||0)); }
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({"&":'&amp;',"<":'&lt;',">":'&gt;',"\"":'&quot;',"'":'&#39;'}[char]));}
 function currentCar() { return CARS.find(c => c.id === save.selectedCar) || CARS[0]; }
 function upgrades(carId = save.selectedCar) { return save.upgrades[carId] || { engine:0, armor:0, handling:0 }; }
@@ -191,7 +193,7 @@ async function showMultiplayer(){
 function showSettings(tab='controls'){
   stopShowroom();
   const tabs={controls:'Управление',graphics:'Графика',about:'Об игре'};
-  const actions=[['accelerate','Газ'],['brake','Тормоз / задний ход'],['left','Поворот влево'],['right','Поворот вправо'],['handbrake','Ручной тормоз / занос'],['fire','Пулемёт (клавиша)'],['nitro','Нитро'],['reset','Эвакуация'],['pause','Пауза']];
+  const actions=[['accelerate','Газ'],['brake','Тормоз / задний ход'],['left','Поворот влево'],['right','Поворот вправо'],['handbrake','Ручной тормоз / занос'],['fire','Пулемёт (клавиша)'],['nitro','Нитро'],['repair','Полевой ремонт за добычу'],['reset','Эвакуация'],['pause','Пауза']];
   let content='';
   if(tab==='controls')content=`<div class="settings-section"><div class="settings-heading"><div><div class="eyebrow">INPUT // DRIVER PROFILE</div><h3>Управление</h3></div><button class="ghost-btn compact" data-reset-controls>Сбросить</button></div><div class="setting-slider"><label><span>Чувствительность руля</span><b data-steer-value>${Math.round(settings.steeringSensitivity*100)}%</b></label><input type="range" min="45" max="120" value="${Math.round(settings.steeringSensitivity*100)}" data-steer-sensitivity></div><div class="setting-slider"><label><span>Скорость отклика руля</span><b data-smooth-value>${settings.steeringSmoothing.toFixed(1)}</b></label><input type="range" min="20" max="90" value="${Math.round(settings.steeringSmoothing*10)}" data-steer-smoothing></div><div class="setting-slider"><label><span>Чувствительность камеры</span><b data-camera-value>${Math.round(settings.cameraSensitivity*10000)}</b></label><input type="range" min="25" max="120" value="${Math.round(settings.cameraSensitivity*10000)}" data-camera-sensitivity></div><label class="setting-toggle"><span><strong>Инверсия камеры по горизонтали</strong><small>Меняет направление вращения при перетаскивании мышью</small></span><input type="checkbox" data-invert-camera ${settings.invertCameraX?'checked':''}><i></i></label><div class="binding-grid">${actions.map(([id,label])=>`<div class="binding-row"><span>${label}</span><button class="key-bind" data-bind="${id}">${keyLabel(settings.bindings[id])}</button></div>`).join('')}</div></div>`;
   if(tab==='graphics')content=`<div class="settings-section"><div class="settings-heading"><div><div class="eyebrow">RENDER // QUALITY PROFILE</div><h3>Графика</h3></div></div><div class="quality-grid">${Object.entries(GRAPHICS_PRESETS).map(([id,preset])=>`<button class="quality-card ${settings.graphics===id?'active':''}" data-quality="${id}"><strong>${preset.label}</strong><span>${preset.description}</span><small>${preset.shadows?`ТЕНИ ${preset.shadowSize}px`:'ТЕНИ ВЫКЛ'} · SCALE ${preset.pixelRatio}</small></button>`).join('')}</div><div class="settings-note"><strong>Изменения применяются при следующем запуске сцены.</strong><p>Низкий пресет отключает динамические тени и снижает внутреннее разрешение. Ультра использует повышенное разрешение и карту теней 4096 px.</p></div></div>`;
@@ -277,6 +279,7 @@ function showBriefing(id){
   stopShowroom();
   const level=LEVELS[id];
   app.innerHTML=`<section class="screen panel-screen" style="background:${level.bg}"><div class="briefing-modal"><div class="modal-card"><div class="eyebrow">БРИФИНГ // УРОВЕНЬ 0${id+1}</div><h2>${level.name}</h2><p>${level.desc}</p><div class="result-stats"><div class="result-stat"><strong>${level.laps}</strong><small>КРУГА</small></div><div class="result-stat"><strong>${level.enemies}</strong><small>СОПЕРНИКОВ</small></div><div class="result-stat"><strong>${level.quota}</strong><small>КВОТА</small></div></div><p>Победи любым способом. Награда: <b style="color:var(--acid)">₡ ${money(level.reward)}</b><br>Управление: ${keyLabel(settings.bindings.accelerate)} / ${keyLabel(settings.bindings.brake)} / ${keyLabel(settings.bindings.left)} / ${keyLabel(settings.bindings.right)} · ${keyLabel(settings.bindings.handbrake)} — ручник · ЛКМ — пулемёт · ПКМ — ракета · СКМ — обзор · ${keyLabel(settings.bindings.nitro)} — нитро · ${keyLabel(settings.bindings.reset)} — эвакуация.</p><div class="modal-actions"><button class="action-btn" data-deploy>Выехать на старт</button><button class="ghost-btn" data-cancel>Вернуться</button></div></div></div></section>`;
+  document.querySelector('.briefing-modal .modal-card>p:nth-of-type(2)')?.insertAdjacentHTML('beforeend',`<br>${keyLabel(settings.bindings.repair)} — удерживать для ремонта за боевую добычу.`);
   document.querySelector('[data-deploy]').onclick=()=>startGame(id);
   document.querySelector('[data-cancel]').onclick=showCampaign;
 }
@@ -291,7 +294,7 @@ async function startGame(levelId,multiplayer=null){
 
 class WreckrunGame {
   constructor(level,multiplayer=null){
-    this.level=level; this.clock=new THREE.Clock(); this.keys={}; this.entities=[]; this.opponents=[]; this.pedestrians=[]; this.particles=[]; this.projectiles=[];this.networkProjectiles=[];this.lastScoreboardUpdate=-10;this.scoreboardVisible=false;
+    this.level=level; this.clock=new THREE.Clock(); this.keys={}; this.entities=[]; this.opponents=[]; this.pedestrians=[]; this.particles=[]; this.projectiles=[];this.networkProjectiles=[];this.lastScoreboardUpdate=-10;this.scoreboardVisible=false;this.repairing=false;this.repairEmit=0;this.repairedHealth=0;
     this.multiplayer=multiplayer;this.remotePlayers=new Map();this.lastNetworkSend=-10;this.ragdolls=[];this.physicsDebris=[];this.destructibles=[];this.navigationObstacles=[];this.burningCars=[];this.bloodDecals=[];this.deferredEffects=[];this.effectLights=[];this.colliderVehicles=new Map();this.colliderDestructibles=new Map();this.impactFxCooldown=new Map();this.elapsed=0;this.kills=0;this.wrecks=0;this.totalDamage=0;this.runCredits=0;this.lap=0;this.checkpoint=0;this.ended=false;this.paused=false;this.lastPrimaryShot=-10;this.lastMissileShot=-10;this.pointerFire={primary:false,secondary:false};this.virtualInputs={};this.touchCameraPointer=null;this.shake=0;this.accumulator=0;this.playerDeathPending=false;this.deathModalAt=Infinity;this.victoryPending=false;this.victoryModalAt=Infinity;this.cameraOrbitYaw=0;this.cameraOrbitPitch=0;this.cameraZoom=1;this.cameraZoomTarget=1;this.cameraDragging=false;this.lastCameraInput=-10;this.boostIntensity=0;this.boostEmit=0;
   }
 
@@ -301,7 +304,7 @@ class WreckrunGame {
     this.models=new ModelLibrary(this.renderer);
     const progress=document.querySelector('[data-load-progress]'),label=document.querySelector('[data-load-label]');
     await this.models.preload(value=>{if(progress)progress.style.width=`${Math.round(value*100)}%`;if(label)label.textContent=`Модели, текстуры и физика: ${Math.round(value*100)}%`;});
-    this.setupWorld();this.setupActors();this.setupMultiplayer();this.setupUI();document.querySelector('.loading-screen')?.remove();this.bindEvents();this.animate();
+    this.setupWorld();this.setupActors();this.setupMultiplayer();this.setupUI();this.prewarmCombatVisuals();document.querySelector('.loading-screen')?.remove();this.bindEvents();this.animate();
   }
 
   setupRenderer(){
@@ -319,6 +322,10 @@ class WreckrunGame {
     const sun=new THREE.DirectionalLight(daylight?0xfff1cf:0xffe0c0,daylight?3.6:2.4);sun.position.set(daylight?-48:-35,daylight?78:60,daylight?-36:-25);sun.castShadow=quality.shadows;sun.shadow.mapSize.set(quality.shadowSize,quality.shadowSize);sun.shadow.camera.left=-96;sun.shadow.camera.right=96;sun.shadow.camera.top=96;sun.shadow.camera.bottom=-96;sun.shadow.camera.near=1;sun.shadow.camera.far=190;sun.shadow.bias=-.00018;sun.shadow.normalBias=.045;sun.shadow.radius=2;this.scene.add(sun);
     this.scene.add(new THREE.AmbientLight(daylight?0x71808a:0x252a31,daylight?.72:.55));
     for(let i=0;i<4;i++){const light=new THREE.PointLight(0xff4317,0,30,2);light.visible=true;this.scene.add(light);this.effectLights.push({light,life:0,duration:0,peak:0,owner:null});}
+  }
+
+  prewarmCombatVisuals(){
+    getParticleTexture('fire');getParticleTexture('smoke');getParticleTexture('shockwave');const rocket=createRocketVisual(),materials=[new THREE.SpriteMaterial({map:getParticleTexture('fire'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}),new THREE.SpriteMaterial({map:getParticleTexture('smoke'),transparent:true,depthWrite:false}),new THREE.SpriteMaterial({map:getParticleTexture('shockwave'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending})],sprites=materials.map((material,index)=>{const sprite=new THREE.Sprite(material);sprite.position.copy(this.player.position).add(new THREE.Vector3(index*.01,.5,0));sprite.scale.setScalar(.001);sprite.frustumCulled=false;this.scene.add(sprite);return sprite;});rocket.position.copy(this.player.position).add(new THREE.Vector3(0,.4,0));rocket.scale.setScalar(.001);rocket.frustumCulled=false;this.scene.add(rocket);this.renderer.compile(this.scene,this.camera);this.scene.remove(rocket);sprites.forEach(sprite=>this.scene.remove(sprite));this.combatPrewarmMaterials=materials;this.renderer.domElement.dataset.combatPrewarmed='true';
   }
 
   setupWorld(){
@@ -426,7 +433,7 @@ class WreckrunGame {
   }
 
   spawnNetworkRocket(ownerId,event){
-    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,.72,10),new THREE.MeshStandardMaterial({color:0x2a2d2b,emissive:0xff3d0d,emissiveIntensity:2.6,roughness:.34,metalness:.75})),direction=new THREE.Vector3().fromArray(event.direction).normalize();mesh.position.fromArray(event.origin);mesh.quaternion.setFromUnitVectors(_up,direction);const flare=new THREE.PointLight(0xff5a17,8,7,2);flare.position.set(0,-.32,0);mesh.add(flare);this.scene.add(mesh);this.networkProjectiles.push({id:event.id,ownerId,mesh,vel:direction.multiplyScalar(event.speed),speed:event.speed,turnRate:event.turnRate,target:this.opponents[event.targetIndex]||null,life:event.life,trail:0});
+    const mesh=createRocketVisual(),direction=new THREE.Vector3().fromArray(event.direction).normalize();mesh.position.fromArray(event.origin);mesh.quaternion.setFromUnitVectors(_up,direction);this.scene.add(mesh);this.networkProjectiles.push({id:event.id,ownerId,mesh,vel:direction.multiplyScalar(event.speed),speed:event.speed,turnRate:event.turnRate,target:this.opponents[event.targetIndex]||null,life:event.life,trail:0});
   }
 
   updateNetworkProjectiles(dt){
@@ -434,7 +441,7 @@ class WreckrunGame {
     for(let i=this.networkProjectiles.length-1;i>=0;i--){const projectile=this.networkProjectiles[i],target=projectile.target;if(target&&!target.userData.dead){const desired=target.position.clone().add(new THREE.Vector3(0,.1,0)).sub(projectile.mesh.position).normalize(),heading=projectile.vel.clone().normalize().lerp(desired,1-Math.exp(-projectile.turnRate*dt)).normalize();projectile.vel.copy(heading).multiplyScalar(projectile.speed);projectile.mesh.quaternion.setFromUnitVectors(_up,heading);}projectile.mesh.position.addScaledVector(projectile.vel,dt);projectile.life-=dt;projectile.trail-=dt;if(projectile.trail<=0){projectile.trail=.02;const rear=projectile.mesh.position.clone().addScaledVector(projectile.vel.clone().normalize(),-.42);this.emitFlame(rear,Math.random()<.4?0xffe56d:0xff4814,.25+Math.random()*.18,.16+Math.random()*.14,projectile.vel.clone().multiplyScalar(-.025));if(Math.random()<.45)this.emitFlame(rear,0x3d3937,.26+Math.random()*.2,.48+Math.random()*.3,new THREE.Vector3(0,.6,0),true);}if(projectile.life<=0)this.removeNetworkProjectile(projectile);}
   }
 
-  removeNetworkProjectile(projectile){const index=this.networkProjectiles.indexOf(projectile);if(index>=0)this.networkProjectiles.splice(index,1);this.scene.remove(projectile.mesh);projectile.mesh.geometry.dispose();projectile.mesh.material.dispose();}
+  removeNetworkProjectile(projectile){const index=this.networkProjectiles.indexOf(projectile);if(index>=0)this.networkProjectiles.splice(index,1);this.scene.remove(projectile.mesh);}
 
   markRemoteDestroyed(remote){remote.dead=true;remote.health=0;remote.boosting=false;remote.group.traverse(mesh=>{if(!mesh.isMesh)return;const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];materials.forEach(material=>{material.color?.multiplyScalar(.28);material.roughness=.98;});});const position=remote.group.position.clone();this.explosion(position,1.4);const lightSlot=this.acquireEffectLight(position.clone().add(new THREE.Vector3(0,1,0)),15,12,5.5,remote.group);this.burningCars.push({car:remote.group,life:5.5,emit:.08,lightSlot});}
 
@@ -467,6 +474,7 @@ class WreckrunGame {
     this.hud.insertAdjacentHTML('beforeend',`<section class="scoreboard-overlay" aria-hidden="true"><div class="scoreboard-panel"><header><div><small>СЕТЕВОЙ ТЕРМИНАЛ // TAB</small><h2>УЧАСТНИКИ ЗАЕЗДА</h2></div><span data-scoreboard-summary></span></header><div class="scoreboard-scroll"><table><thead><tr><th>Водитель</th><th>Тип / статус</th><th>Корпус</th><th>Скорость</th><th>Счёт</th><th>Урон</th><th>Оружие</th><th>Машина / характеристики</th></tr></thead><tbody data-scoreboard-body></tbody></table></div><footer>Удерживайте <b>TAB</b>, чтобы видеть состав и боевое состояние заезда</footer></div></section>`);
     this.mapPlayer=this.hud.querySelector('.map-player');this.mapEnemies=this.opponents.map((_,i)=>this.hud.querySelector(`[data-map-enemy="${i}"]`));this.mapPedestrians=this.pedestrians.map((_,i)=>this.hud.querySelector(`[data-map-ped="${i}"]`));this.mapProps=this.destructibles.map((_,i)=>this.hud.querySelector(`[data-map-prop="${i}"]`));this.mapCheckpoints=this.waypoints.map((_,i)=>this.hud.querySelector(`[data-map-checkpoint="${i}"]`));
     this.mapRemotePlayers=new Map();const minimap=this.hud.querySelector('.minimap');for(const remote of this.remotePlayers.values()){minimap?.insertAdjacentHTML('beforeend',`<i class="map-remote" data-map-remote="${remote.id}"></i>`);this.mapRemotePlayers.set(remote.id,this.hud.querySelector(`[data-map-remote="${remote.id}"]`));}
+    this.hud.querySelector('.car-vitals')?.insertAdjacentHTML('beforeend',`<div class="vital repair"><span class="hud-label">${keyLabel(settings.bindings.repair)} // Ремонт</span><strong data-repair-status>₡ ${REPAIR_COST_PER_HEALTH} / HP</strong></div>`);this.hud.querySelector('.controls-hint')?.insertAdjacentHTML('beforeend',` · <b>${keyLabel(settings.bindings.repair)}</b> ремонт за добычу`);this.hud.querySelector('.mobile-utility')?.insertAdjacentHTML('afterbegin','<button class="mobile-control mobile-small mobile-repair" type="button" data-mobile-action="repair"><span>FIX</span></button>');
     this.feedEl=this.hud.querySelector('.event-feed');this.addEvent('Двигатели запущены. <strong>УНИЧТОЖАЙ.</strong>');if(new URLSearchParams(location.search).has('debugScoreboard'))requestAnimationFrame(()=>this.setScoreboardVisible(true));
   }
 
@@ -494,13 +502,17 @@ class WreckrunGame {
   animate=()=>{if(this.destroyed)return;this.raf=requestAnimationFrame(this.animate);const dt=Math.min(this.clock.getDelta(),.034);if(!this.paused&&!this.ended){this.elapsed+=dt;this.updatePlayer(dt);this.updateAI(dt);this.updatePedestrians(dt);this.physics.timestep=dt;this.physics.step(this.eventQueue);this.handlePhysicsContacts();syncVehicle(this.player.userData.vehicle);this.opponents.forEach(ai=>syncVehicle(ai.userData.vehicle));this.updateMultiplayer(dt);this.syncDestructibles();this.ragdolls.forEach(syncRagdoll);this.syncPhysicsDebris(dt);this.hitPedestrians();this.updateProjectiles(dt);this.updateBurningCars(dt);this.updateDeferredEffects(dt);this.updateParticles(dt);this.updateBloodDecals(dt);if(this.playerDeathPending&&this.elapsed>=this.deathModalAt)this.finish(false,'МАШИНА УНИЧТОЖЕНА');this.checkRules();this.updateHUD();}this.updateCamera(dt);this.renderer.render(this.scene,this.camera);};
 
   updatePlayer(dt){
-    const d=this.player.userData;if(d.dead)return;const forward=this.actionPressed('accelerate'),reverse=this.actionPressed('brake'),left=this.actionPressed('left'),right=this.actionPressed('right'),handbrake=this.actionPressed('handbrake');
+    const d=this.player.userData;if(d.dead)return;this.updateRepair(dt);const forward=this.actionPressed('accelerate'),reverse=this.actionPressed('brake'),left=this.actionPressed('left'),right=this.actionPressed('right'),handbrake=this.actionPressed('handbrake');
     const boosting=this.actionPressed('nitro')&&forward&&d.nitro>0;this.boostIntensity=THREE.MathUtils.damp(this.boostIntensity,boosting?1:0,boosting?7:3.2,dt);this.boostEmit-=dt;if(boosting){d.nitro=Math.max(0,d.nitro-23*dt);if(this.boostEmit<=0){this.boostEmit=.024;this.emitBoostFlames(this.player);}}else d.nitro=Math.min(100,d.nitro+4.8*dt);if(this.boostLight){this.boostLight.intensity=this.boostIntensity*14;this.boostLight.position.copy(this.player.position).add(new THREE.Vector3(0,.55,-2.35).applyQuaternion(this.player.quaternion));}
     const throttle=(forward?1:0)-(reverse?1:0),steer=((left?1:0)-(right?1:0))*d.handling;
     driveVehicle(d.vehicle,{throttle,steer,steerSensitivity:settings.steeringSensitivity,steerSmoothing:settings.steeringSmoothing,brake:!throttle&&Math.abs(d.speed)<1?.15:0,handbrake,boost:boosting},dt);d.speed=d.vehicle.controller.currentVehicleSpeed();
     if((Math.abs(steer)>.35&&Math.abs(d.speed)>12&&Math.random()<.25)||(handbrake&&Math.abs(d.speed)>7&&Math.random()<dt*26))this.emitSmoke(this.player,handbrake?0x958b7b:0x777777,handbrake?.22:.16);
     if(this.pointerFire.primary||this.actionPressed('fire'))this.fireMachineGun();if(this.pointerFire.secondary||this.virtualInputs.missile)this.fireMissile();this.checkCheckpoint();
     if(d.health<d.maxHealth*.42&&Math.random()<dt*5)this.emitSmoke(this.player,d.health<d.maxHealth*.2?0x171717:0x555555,.5);
+  }
+
+  updateRepair(dt){
+    const d=this.player.userData,requested=this.actionPressed('repair'),wasRepairing=this.repairing;this.repairEmit-=dt;this.repairing=false;if(!requested||d.health>=d.maxHealth-.001||this.runCredits<=0){this.renderer.domElement.dataset.repairing='false';return;}const heal=Math.min(REPAIR_HEALTH_PER_SECOND*dt,d.maxHealth-d.health,this.runCredits/REPAIR_COST_PER_HEALTH);if(heal<=0)return;d.health=Math.min(d.maxHealth,d.health+heal);this.runCredits=Math.max(0,this.runCredits-heal*REPAIR_COST_PER_HEALTH);this.repairedHealth+=heal;this.repairing=true;this.renderer.domElement.dataset.repairing='true';if(!wasRepairing)this.addEvent(`<strong>ПОЛЕВОЙ РЕМОНТ:</strong> ₡ ${REPAIR_COST_PER_HEALTH} за 1 HP`);if(this.repairEmit<=0){this.repairEmit=.075;const point=this.player.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.35+Math.random()*.75,(Math.random()-.5)*2.4).applyQuaternion(this.player.quaternion));for(let i=0;i<2;i++)this.emitSpark(point,Math.random()<.5?0x7dff8a:0xd9ff9f,.035+Math.random()*.025,.16+Math.random()*.18,new THREE.Vector3((Math.random()-.5)*2,1.2+Math.random()*2.5,(Math.random()-.5)*2));}
   }
 
   updateAI(dt){
@@ -684,7 +696,8 @@ class WreckrunGame {
     const weapon=MACHINE_GUNS.find(x=>x.id===save.selectedMachineGun)||MACHINE_GUNS[0];if(this.elapsed-this.lastPrimaryShot<weapon.cooldown)return;this.lastPrimaryShot=this.elapsed;
     const origin=this.player.position.clone().add(new THREE.Vector3(0,.22,0)),direction=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize().applyAxisAngle(_up,(Math.random()-.5)*weapon.spread),ray=new RAPIER.Ray(origin,direction),worldHit=this.physics.castRay(ray,weapon.range,true,undefined,undefined,this.player.userData.vehicle.collider,this.player.userData.vehicle.body),worldDistance=worldHit?.timeOfImpact??weapon.range,end=origin.clone().addScaledVector(direction,weapon.range),segment=new THREE.Line3(origin,end),closest=new THREE.Vector3();
     let pedHit=null,pedPoint=null,pedDistance=Infinity;for(const p of this.pedestrians){if(p.userData.dead)continue;const target=p.position.clone().add(new THREE.Vector3(0,.72,0));segment.closestPointToPoint(target,true,closest);const along=origin.distanceTo(closest);if(along<=worldDistance+.1&&closest.distanceTo(target)<.58&&along<pedDistance){pedHit=p;pedPoint=closest.clone();pedDistance=along;}}
-    let impact=origin.clone().addScaledVector(direction,worldDistance),hit=Boolean(worldHit);if(pedHit&&pedDistance<=worldDistance){impact.copy(pedPoint);hit=true;this.ragdollPedestrian(pedHit,direction,7,false);}else if(worldHit){const car=this.colliderVehicles.get(worldHit.collider.handle);if(car&&car!==this.player&&!car.userData.dead){this.damageCar(car,weapon.damage,this.player);const kick=direction.clone().multiplyScalar(weapon.kick);car.userData.vehicle.body.applyImpulse({x:kick.x,y:3,z:kick.z},true);}else this.sparkBurst(impact,4,direction.clone().negate());}this.makeTracer(origin,impact,weapon.color);this.sendCombat({kind:'machine_gun',origin:origin.toArray(),impact:impact.toArray(),color:weapon.color,hit});
+    let remoteHit=null,remotePoint=null,remoteDistance=Infinity;for(const remote of this.remotePlayers.values()){if(remote.dead)continue;const car=CARS.find(item=>item.id===remote.carId)||CARS[0],radius=carDimensions(car).width*.62,target=remote.group.position.clone().add(new THREE.Vector3(0,.18,0));segment.closestPointToPoint(target,true,closest);const perpendicular=closest.distanceTo(target),centerDistance=origin.distanceTo(closest);if(perpendicular>=radius)continue;const entryDistance=Math.max(0,centerDistance-Math.sqrt(radius*radius-perpendicular*perpendicular));if(entryDistance<remoteDistance&&entryDistance<=worldDistance+.1){remoteHit=remote;remoteDistance=entryDistance;remotePoint=origin.clone().addScaledVector(direction,entryDistance);}}
+    let impact=origin.clone().addScaledVector(direction,worldDistance),hit=Boolean(worldHit);if(remoteHit&&remoteDistance<=Math.min(pedDistance,worldDistance)){impact.copy(remotePoint);hit=true;this.sparkBurst(impact,7,direction.clone().negate());this.renderer.domElement.dataset.lastBulletImpact='remote-vehicle';}else if(pedHit&&pedDistance<=worldDistance){impact.copy(pedPoint);hit=true;this.ragdollPedestrian(pedHit,direction,7,false);this.renderer.domElement.dataset.lastBulletImpact='pedestrian';}else if(worldHit){const car=this.colliderVehicles.get(worldHit.collider.handle);if(car&&car!==this.player&&!car.userData.dead){this.damageCar(car,weapon.damage,this.player);const kick=direction.clone().multiplyScalar(weapon.kick);car.userData.vehicle.body.applyImpulse({x:kick.x,y:3,z:kick.z},true);this.sparkBurst(impact,7,direction.clone().negate());this.renderer.domElement.dataset.lastBulletImpact='vehicle';}else{this.sparkBurst(impact,4,direction.clone().negate());this.renderer.domElement.dataset.lastBulletImpact=worldHit.collider.userData?.type||'world';}}this.makeTracer(origin,impact,weapon.color);this.sendCombat({kind:'machine_gun',origin:origin.toArray(),impact:impact.toArray(),color:weapon.color,hit});
   }
 
   acquireMissileTarget(launcher=MISSILE_LAUNCHERS.find(x=>x.id===save.selectedMissileLauncher)){
@@ -693,7 +706,7 @@ class WreckrunGame {
 
   fireMissile(){
     const launcher=MISSILE_LAUNCHERS.find(x=>x.id===save.selectedMissileLauncher)||MISSILE_LAUNCHERS[0];if(launcher.id==='none'||this.elapsed-this.lastMissileShot<launcher.cooldown)return;this.lastMissileShot=this.elapsed;
-    const target=this.acquireMissileTarget(launcher),rocket=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,.72,10),new THREE.MeshStandardMaterial({color:0x2a2d2b,emissive:0xff3d0d,emissiveIntensity:2.6,roughness:.34,metalness:.75})),launchDirection=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize();rocket.position.copy(this.player.position).addScaledVector(launchDirection,1.65);rocket.position.y+=.3;rocket.quaternion.setFromUnitVectors(_up,launchDirection);const flare=new THREE.PointLight(0xff5a17,8,7,2);flare.position.set(0,-.32,0);rocket.add(flare);const networkId=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;rocket.userData={vel:launchDirection.multiplyScalar(launcher.speed),speed:launcher.speed,turnRate:launcher.turnRate,target,damageScale:launcher.damageScale,life:2.65,trail:0,networkId};this.scene.add(rocket);this.projectiles.push(rocket);this.sendCombat({kind:'missile_launch',id:networkId,origin:rocket.position.toArray(),direction:rocket.userData.vel.clone().normalize().toArray(),speed:launcher.speed,turnRate:launcher.turnRate,life:rocket.userData.life,targetIndex:target?this.opponents.indexOf(target):-1});this.addEvent(target?`<strong>ЦЕЛЬ ЗАХВАЧЕНА:</strong> ${target.userData.name}`:'<strong>РАКЕТА:</strong> свободный пуск');
+    const target=this.acquireMissileTarget(launcher),rocket=createRocketVisual(),launchDirection=forwardVector(this.player.userData.vehicle.body,new THREE.Vector3()).setY(0).normalize();rocket.position.copy(this.player.position).addScaledVector(launchDirection,1.65);rocket.position.y+=.3;rocket.quaternion.setFromUnitVectors(_up,launchDirection);const networkId=`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;rocket.userData={vel:launchDirection.multiplyScalar(launcher.speed),speed:launcher.speed,turnRate:launcher.turnRate,target,damageScale:launcher.damageScale,life:2.65,trail:0,networkId};this.scene.add(rocket);this.projectiles.push(rocket);this.sendCombat({kind:'missile_launch',id:networkId,origin:rocket.position.toArray(),direction:rocket.userData.vel.clone().normalize().toArray(),speed:launcher.speed,turnRate:launcher.turnRate,life:rocket.userData.life,targetIndex:target?this.opponents.indexOf(target):-1});this.addEvent(target?`<strong>ЦЕЛЬ ЗАХВАЧЕНА:</strong> ${target.userData.name}`:'<strong>РАКЕТА:</strong> свободный пуск');
   }
 
   updateProjectiles(dt){
@@ -701,7 +714,7 @@ class WreckrunGame {
   }
 
   detonateRocket(rocket,position,directPed,hitCollider){
-    rocket.position.copy(position);this.renderer.domElement.dataset.lastRocketImpact=directPed?'pedestrian':(hitCollider?.userData?.type||'range');const direction=rocket.userData.vel.clone().normalize(),damageScale=rocket.userData.damageScale||1;if(directPed)this.ragdollPedestrian(directPed,direction,18*damageScale,false);for(const p of this.pedestrians){if(p.userData.dead)continue;const dist=p.position.distanceTo(position);if(dist<7.5)this.ragdollPedestrian(p,p.position.clone().sub(position).normalize(),THREE.MathUtils.mapLinear(dist,0,7.5,15,5)*damageScale,false);}const obstacle=this.colliderDestructibles.get(hitCollider?.handle);if(obstacle&&!obstacle.broken){obstacle.pendingBreak=true;this.breakObstacle(obstacle,direction,this.player);}const intensity=1.42*Math.min(1.2,damageScale);this.explosion(position,intensity);for(const o of this.opponents){const dist=o.position.distanceTo(position);if(!o.userData.dead&&dist<10){this.damageCar(o,THREE.MathUtils.mapLinear(dist,0,10,52,7)*damageScale,this.player);const impulse=o.position.clone().sub(position).normalize().multiplyScalar((10-dist)*165*damageScale);o.userData.vehicle.body.applyImpulse({x:impulse.x,y:135*damageScale,z:impulse.z},true);}}if(rocket.userData.networkId)this.sendCombat({kind:'missile_explode',id:rocket.userData.networkId,position:position.toArray(),intensity});this.scene.remove(rocket);rocket.geometry.dispose();rocket.material.dispose();
+    rocket.position.copy(position);this.renderer.domElement.dataset.lastRocketImpact=directPed?'pedestrian':(hitCollider?.userData?.type||'range');const direction=rocket.userData.vel.clone().normalize(),damageScale=rocket.userData.damageScale||1;if(directPed)this.ragdollPedestrian(directPed,direction,18*damageScale,false);for(const p of this.pedestrians){if(p.userData.dead)continue;const dist=p.position.distanceTo(position);if(dist<7.5)this.ragdollPedestrian(p,p.position.clone().sub(position).normalize(),THREE.MathUtils.mapLinear(dist,0,7.5,15,5)*damageScale,false);}const obstacle=this.colliderDestructibles.get(hitCollider?.handle);if(obstacle&&!obstacle.broken){obstacle.pendingBreak=true;this.breakObstacle(obstacle,direction,this.player);}const intensity=1.42*Math.min(1.2,damageScale);this.explosion(position,intensity);for(const o of this.opponents){const dist=o.position.distanceTo(position);if(!o.userData.dead&&dist<10){this.damageCar(o,THREE.MathUtils.mapLinear(dist,0,10,52,7)*damageScale,this.player);const impulse=o.position.clone().sub(position).normalize().multiplyScalar((10-dist)*165*damageScale);o.userData.vehicle.body.applyImpulse({x:impulse.x,y:135*damageScale,z:impulse.z},true);}}if(rocket.userData.networkId)this.sendCombat({kind:'missile_explode',id:rocket.userData.networkId,position:position.toArray(),intensity});this.scene.remove(rocket);
   }
 
   checkCheckpoint(){
@@ -747,6 +760,7 @@ class WreckrunGame {
   }
 
   updateHUD(){
+    const repairData=this.player.userData,repairStatus=this.repairing?`+${REPAIR_HEALTH_PER_SECOND} HP/S`:(repairData.health>=repairData.maxHealth-.001?'FULL':this.runCredits<=.001?'НЕТ ДОБЫЧИ':`${keyLabel(settings.bindings.repair)} HOLD · ₡ ${REPAIR_COST_PER_HEALTH}/HP`),repairEl=this.hud.querySelector('[data-repair-status]');if(repairEl)repairEl.textContent=repairStatus;this.hud.querySelector('.vital.repair')?.classList.toggle('active',this.repairing);
     this.updateScoreboard();
     const d=this.player.userData,remaining=this.opponents.filter(o=>!o.userData.dead).length;this.hud.querySelector('[data-lap]').textContent=`${Math.min(this.level.laps,this.lap+1)}/${this.level.laps}`;this.hud.querySelector('[data-enemies]').textContent=remaining;this.hud.querySelector('[data-kills]').textContent=`${this.kills}/${this.level.quota}`;this.hud.querySelector('[data-total-damage]').textContent=money(Math.round(this.totalDamage));this.hud.querySelector('[data-run-credits]').textContent=`₡ ${money(this.runCredits)}`;this.hud.querySelector('[data-health]').textContent=Math.max(0,Math.round(d.health/d.maxHealth*100))+'%';this.hud.querySelector('[data-nitro]').textContent=Math.round(d.nitro)+'%';const sp=Math.round(Math.abs(d.speed)*3.6);this.hud.querySelector('[data-speed]').textContent=String(sp).padStart(3,'0');this.hud.querySelector('.speedo i').style.setProperty('--speed',Math.min(100,sp/2.5)+'%');this.hud.querySelector('[data-time]').textContent=formatTime(this.elapsed);
     const machineGun=MACHINE_GUNS.find(w=>w.id===save.selectedMachineGun)||MACHINE_GUNS[0],launcher=MISSILE_LAUNCHERS.find(w=>w.id===save.selectedMissileLauncher)||MISSILE_LAUNCHERS[0],machineReady=this.elapsed-this.lastPrimaryShot>=machineGun.cooldown,missileReady=launcher.id!=='none'&&this.elapsed-this.lastMissileShot>=launcher.cooldown,missileTarget=missileReady?this.acquireMissileTarget(launcher):null;this.hud.querySelector('[data-machine-gun-status]').textContent=machineReady?'READY':'FIRE';this.hud.querySelector('[data-missile-status]').textContent=launcher.id==='none'?'EMPTY':missileReady?(missileTarget?'LOCK':'SEARCH'):'WAIT';this.hud.querySelector('.crosshair')?.classList.toggle('locked',Boolean(missileTarget));
@@ -837,6 +851,10 @@ function createPhysicsMenuDemo(container){
 const _v1=new THREE.Vector3();
 const _v2=new THREE.Vector3();
 const _up=new THREE.Vector3(0,1,0);
+const _rocketGeometry=new THREE.CylinderGeometry(.08,.13,.72,10);
+const _rocketMaterial=new THREE.MeshStandardMaterial({color:0x2a2d2b,emissive:0xff3d0d,emissiveIntensity:2.6,roughness:.34,metalness:.75});
+let _rocketFlareMaterial=null;
+function createRocketVisual(){if(!_rocketFlareMaterial)_rocketFlareMaterial=new THREE.SpriteMaterial({map:getParticleTexture('fire'),color:0xff8a31,transparent:true,opacity:.92,depthWrite:false,blending:THREE.AdditiveBlending});const rocket=new THREE.Mesh(_rocketGeometry,_rocketMaterial),flare=new THREE.Sprite(_rocketFlareMaterial);flare.position.set(0,-.38,0);flare.scale.set(.34,.58,1);rocket.add(flare);return rocket;}
 const _particleGeometry=new THREE.IcosahedronGeometry(1,0);
 const _bloodDropGeometry=new THREE.SphereGeometry(1,8,6);
 const _sparkGeometry=new THREE.CylinderGeometry(1,1,1,5,1,false);
