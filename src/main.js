@@ -488,7 +488,7 @@ class WreckrunGame {
       if(obstacle2&&!obstacle2.pendingBreak&&this.damageObstacle(obstacle2,force,car1)){obstacle2.pendingBreak=true;breaks.push({obstacle:obstacle2,direction:direction.clone(),source:car1});}
       if(force<15000)return;
       if(car1&&car2){this.resolveVehicleImpact(car1,car2,force);return;}
-      const apply=(car,dir,other,otherCollider)=>{if(!car||car.userData.dead||otherCollider?.userData?.type==='ground')return;if(!other&&force<52000)return;if(this.elapsed-car.userData.lastImpact<.48)return;car.userData.lastImpact=this.elapsed;let amount=THREE.MathUtils.clamp((force-15000)/26000,0,24);if(car!==this.player&&other===this.player&&save.selectedWeapon==='ram')amount*=1.5;if(amount<.7)return;this.damageCar(car,amount,other);this.deformCar(car,dir,amount);this.shake=Math.max(this.shake,Math.min(.9,amount/26));};
+      const apply=(car,dir,other,otherCollider)=>{if(!car||car.userData.dead||otherCollider?.userData?.type==='ground')return;if(!other&&force<52000)return;if(this.elapsed-car.userData.lastImpact<.48)return;car.userData.lastImpact=this.elapsed;let amount=THREE.MathUtils.clamp((force-15000)/26000,0,24);if(car!==this.player&&other===this.player&&save.selectedWeapon==='ram')amount*=1.5;if(amount<.7)return;const hit=otherCollider?.translation?.(),impactDirection=hit?new THREE.Vector3(hit.x,0,hit.z).sub(car.position).setY(0):dir;if(impactDirection.lengthSq()<.01)impactDirection.copy(dir);impactDirection.normalize();this.damageCar(car,amount,other);this.deformCar(car,impactDirection,amount);this.shake=Math.max(this.shake,Math.min(.9,amount/26));};
       apply(car1,direction,car2,collider2);apply(car2,direction.clone().negate(),car1,collider1);
     });
     breaks.forEach(item=>this.breakObstacle(item.obstacle,item.direction,item.source));
@@ -501,7 +501,9 @@ class WreckrunGame {
     if(attack1>attack2*1.12+250){const ratio=Math.min(4,attack1/Math.max(600,attack2));damage1=base*(.06+.08/ratio);damage2=base*(1.05+Math.min(.9,(ratio-1)*.35));if(car1===this.player&&save.selectedWeapon==='ram')damage2*=1.65;}
     else if(attack2>attack1*1.12+250){const ratio=Math.min(4,attack2/Math.max(600,attack1));damage2=base*(.06+.08/ratio);damage1=base*(1.05+Math.min(.9,(ratio-1)*.35));if(car2===this.player&&save.selectedWeapon==='ram')damage1*=1.65;}
     const apply=(car,other,amount,direction)=>{if(car.userData.dead||amount<.45)return;car.userData.lastImpact=this.elapsed;this.damageCar(car,amount,other);this.deformCar(car,direction,amount);};
-    apply(car1,car2,damage1,to2.clone().negate());apply(car2,car1,damage2,to2);this.shake=Math.max(this.shake,Math.min(.95,Math.max(damage1,damage2)/25));
+    // `to2` points at car2, therefore it is the actual contact face on car1.
+    // Using its inverse here dented the rear/right side on front/left impacts.
+    apply(car1,car2,damage1,to2);apply(car2,car1,damage2,to2.clone().negate());this.shake=Math.max(this.shake,Math.min(.95,Math.max(damage1,damage2)/25));
   }
 
   applyContactGrip(car1,car2,obstacle1,obstacle2,normal,force){
