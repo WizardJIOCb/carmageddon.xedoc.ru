@@ -182,6 +182,9 @@ export class ModelLibrary {
       if ('clearcoat' in object.material) object.material.clearcoat = 0;
       object.material.needsUpdate = true;
     });
+    let hips = null;
+    model.traverse(object => { if (object.isBone && object.name === 'Hips') hips = object; });
+    const hipsBasePosition = hips?.position.clone() || null;
     const mixer = new THREE.AnimationMixer(model);
     const idle = mixer.clipAction(this.personAnimations.idle);
     const run = mixer.clipAction(this.personAnimations.run);
@@ -192,7 +195,7 @@ export class ModelLibrary {
     idle.time = Math.random() * Math.max(.01, this.personAnimations.idle.duration);
     run.timeScale = .92 + Math.random() * .2;
     idle.play();
-    return { model, mixer, idle, run };
+    return { model, mixer, idle, run, hips, hipsBasePosition };
   }
 
   createEnvironment(levelId, index) {

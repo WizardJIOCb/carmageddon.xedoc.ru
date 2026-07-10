@@ -55,7 +55,7 @@ export function createVehicle(world, visual, options) {
       .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
       .setRestitution(.035)
       .setMass(options.mass)
-      .setCollisionGroups(0x00040005)
+      .setCollisionGroups(0x00040007)
       .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS | RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
       .setContactForceEventThreshold(1800),
     body,
@@ -189,7 +189,7 @@ export function createRagdoll(world, scene, position, impulse, colors, model = n
       colliderDesc = RAPIER.ColliderDesc.capsule(def.half, def.radius);
       geometry = new THREE.CapsuleGeometry(def.radius, def.half * 2, 5, 10);
     }
-    world.createCollider(colliderDesc.setMass(def.mass).setFriction(.76).setRestitution(.08).setCollisionGroups(0x00020001), body);
+    world.createCollider(colliderDesc.setMass(def.mass).setFriction(.22).setRestitution(.035).setCollisionGroups(0x00020005), body);
     const mesh = new THREE.Mesh(geometry, def.material);
     mesh.castShadow = true;
     scene.add(mesh);
@@ -217,17 +217,17 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   const bones = {};
   model.traverse(object => { if (object.isBone) bones[object.name] = object; });
   const definitions = [
-    { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .135, mass: 2.2 },
-    { name: 'torso', bone: 'Spine', end: 'Neck', radius: .16, mass: 4.2 },
-    { name: 'head', bone: 'Head', shape: 'ball', radius: .205, mass: 1 },
-    { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .075, mass: .9 },
-    { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .064, mass: .65 },
-    { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .075, mass: .9 },
-    { name: 'foreArmR', bone: 'RightForeArm', end: 'RightHand', radius: .064, mass: .65 },
-    { name: 'thighL', bone: 'LeftUpLeg', end: 'LeftLeg', radius: .106, mass: 1.6 },
-    { name: 'shinL', bone: 'LeftLeg', end: 'LeftFoot', radius: .084, mass: 1.2 },
-    { name: 'thighR', bone: 'RightUpLeg', end: 'RightLeg', radius: .106, mass: 1.6 },
-    { name: 'shinR', bone: 'RightLeg', end: 'RightFoot', radius: .084, mass: 1.2 },
+    { name: 'pelvis', bone: 'Hips', end: 'Spine', radius: .135, mass: 2.2, maxSwing: .48 },
+    { name: 'torso', bone: 'Spine', end: 'Neck', radius: .16, mass: 4.2, maxSwing: .58 },
+    { name: 'head', bone: 'Head', shape: 'ball', radius: .205, mass: 1, maxSwing: .62 },
+    { name: 'upperArmL', bone: 'LeftArm', end: 'LeftForeArm', radius: .075, mass: .9, maxSwing: 1.12 },
+    { name: 'foreArmL', bone: 'LeftForeArm', end: 'LeftHand', radius: .064, mass: .65, maxSwing: 1.18 },
+    { name: 'upperArmR', bone: 'RightArm', end: 'RightForeArm', radius: .075, mass: .9, maxSwing: 1.12 },
+    { name: 'foreArmR', bone: 'RightForeArm', end: 'RightHand', radius: .064, mass: .65, maxSwing: 1.18 },
+    { name: 'thighL', bone: 'LeftUpLeg', end: 'LeftLeg', radius: .106, mass: 1.6, maxSwing: .82 },
+    { name: 'shinL', bone: 'LeftLeg', end: 'LeftFoot', radius: .084, mass: 1.2, maxSwing: .9 },
+    { name: 'thighR', bone: 'RightUpLeg', end: 'RightLeg', radius: .106, mass: 1.6, maxSwing: .82 },
+    { name: 'shinR', bone: 'RightLeg', end: 'RightFoot', radius: .084, mass: 1.2, maxSwing: .9 },
   ];
   const pieces = [];
   const byName = {};
@@ -258,15 +258,15 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
         .setTranslation(center.x, center.y, center.z)
         .setRotation({ x: bodyRotation.x, y: bodyRotation.y, z: bodyRotation.z, w: bodyRotation.w })
         .setLinearDamping(.34)
-        .setAngularDamping(def.name === 'head' ? 3.8 : 1.65)
+        .setAngularDamping(def.name === 'head' ? 4.5 : 2.35)
         .setCcdEnabled(true),
     );
     world.createCollider(
       colliderDesc
         .setMass(def.mass)
-        .setFriction(.82)
-        .setRestitution(.01)
-        .setCollisionGroups(0x00020001),
+        .setFriction(.22)
+        .setRestitution(.035)
+        .setCollisionGroups(0x00020005),
       body,
     );
     const inverseBodyRotation = bodyRotation.clone().invert();
@@ -279,8 +279,10 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
       boneOffset: start.clone().sub(center).applyQuaternion(inverseBodyRotation),
       boneRotationOffset: inverseBodyRotation.multiply(boneWorldRotation),
       localPosition: bone.position.clone(),
+      localQuaternion: bone.quaternion.clone(),
       localScale: bone.scale.clone(),
       mass: def.mass,
+      maxSwing: def.maxSwing,
     };
     pieces.push(piece);
     byName[def.name] = piece;
@@ -310,9 +312,9 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   const pelvisStartWorld = byName.pelvis?.bone.getWorldPosition(new THREE.Vector3()) || rootStartPosition.clone();
 
   pieces.forEach((piece, index) => {
-    const scale = piece.mass * .22;
-    piece.body.applyImpulse({ x: impulse.x * scale, y: impulse.y * scale, z: impulse.z * scale }, true);
-    piece.body.applyTorqueImpulse({ x: (Math.random() - .5) * (1.1 + index * .04), y: (Math.random() - .5) * .65, z: (Math.random() - .5) * (1.1 + index * .04) }, true);
+    const launch = .5 + (index % 3) * .015;
+    piece.body.setLinvel({ x: impulse.x * launch, y: impulse.y * launch, z: impulse.z * launch }, true);
+    piece.body.setAngvel({ x: (Math.random() - .5) * 1.5, y: (Math.random() - .5) * .7, z: (Math.random() - .5) * 1.5 }, true);
   });
   return { skinned: true, model, pieces, rootStartPosition, pelvisStartWorld };
 }
@@ -362,8 +364,11 @@ export function syncRagdoll(ragdoll) {
       const parent = piece.bone.parent;
       parent.updateWorldMatrix(true, false);
       const parentRotation = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const desiredLocal = parentRotation.multiply(worldRotation);
+      const swing = piece.localQuaternion.angleTo(desiredLocal);
+      if (swing > piece.maxSwing) desiredLocal.copy(piece.localQuaternion).slerp(desiredLocal, piece.maxSwing / swing);
       piece.bone.position.copy(piece.localPosition);
-      piece.bone.quaternion.copy(parentRotation.multiply(worldRotation));
+      piece.bone.quaternion.copy(desiredLocal);
       piece.bone.scale.copy(piece.localScale);
       piece.bone.updateMatrixWorld(true);
     });
