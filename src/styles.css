@@ -232,6 +232,7 @@ body::before {
 .hud-top { position:absolute; top:24px; left:30px; right:30px; display:flex; justify-content:space-between; align-items:flex-start; }
 .race-objective { padding:12px 15px 10px;background:linear-gradient(90deg,rgba(6,7,7,.9),rgba(6,7,7,.35));border-left:3px solid var(--acid);min-width:270px;clip-path:polygon(0 0,95% 0,100% 100%,0 100%)}
 .race-objective small,.hud-label{display:block;color:#888e89;font:9px 'Share Tech Mono';letter-spacing:.15em;text-transform:uppercase}.race-objective strong{font-size:20px;text-transform:uppercase}.race-objective span{color:var(--acid)}
+.combat-stats{display:flex;gap:14px;margin-top:8px;padding-top:7px;border-top:1px solid rgba(132,145,136,.24);font:10px 'Share Tech Mono';letter-spacing:.08em;color:#9fa8a0}.combat-stats span{display:flex;gap:5px;align-items:center}.combat-stats b{color:#ecf6df;font-size:12px}.combat-stats span:last-child b{color:var(--acid)}
 .timer{text-align:right;font:34px 'Share Tech Mono';text-shadow:0 2px 5px #000}.timer small{font-size:9px;color:#777;display:block;letter-spacing:.22em}
 .hud-bottom { position:absolute; bottom:25px;left:30px;right:30px;display:flex;align-items:flex-end;justify-content:space-between; }
 .car-vitals {display:grid;grid-template-columns:repeat(3,85px);gap:7px}.vital{background:rgba(7,8,8,.82);padding:9px;border-bottom:2px solid #373b38}.vital strong{display:block;font:20px 'Share Tech Mono';}.vital.health{border-color:var(--hot)}.vital.nitro{border-color:#18d5ff}.vital.weapon{border-color:var(--acid)}
