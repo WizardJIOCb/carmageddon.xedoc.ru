@@ -212,6 +212,8 @@ export function createRagdoll(world, scene, position, impulse, colors, model = n
 
 function createSkinnedRagdoll(world, scene, model, impulse) {
   if (model.parent !== scene) scene.attach(model);
+  const launchDirection = new THREE.Vector3(impulse.x, 0, impulse.z);
+  if (launchDirection.lengthSq() > .001) model.position.addScaledVector(launchDirection.normalize(), .28);
   model.updateMatrixWorld(true);
 
   const bones = {};
@@ -312,7 +314,7 @@ function createSkinnedRagdoll(world, scene, model, impulse) {
   const pelvisStartWorld = byName.pelvis?.bone.getWorldPosition(new THREE.Vector3()) || rootStartPosition.clone();
 
   pieces.forEach((piece, index) => {
-    const launch = .5 + (index % 3) * .015;
+    const launch = .72 + (index % 3) * .015;
     piece.body.setLinvel({ x: impulse.x * launch, y: impulse.y * launch, z: impulse.z * launch }, true);
     piece.body.setAngvel({ x: (Math.random() - .5) * 1.5, y: (Math.random() - .5) * .7, z: (Math.random() - .5) * 1.5 }, true);
   });
