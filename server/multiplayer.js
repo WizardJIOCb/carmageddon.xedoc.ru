@@ -7,13 +7,14 @@ const rooms = new Map();
 const carIds = new Set(['razor','marauder','brutus','mantis','hearse','phantom']);
 const machineGunIds = new Set(['scrapgun','vulcan','shredder']);
 const missileLauncherIds = new Set(['none','sidewinder','reaper']);
-const combatKinds = new Set(['machine_gun','missile_launch','missile_explode','vehicle_impact']);
+const combatKinds = new Set(['machine_gun','missile_launch','missile_explode','vehicle_impact','ai_damage']);
 
 const clamp = (value, min, max) => { const number=Number(value);return Math.max(min,Math.min(max,Number.isFinite(number)?number:min)); };
 const normalizeCar = value => carIds.has(value) ? value : 'razor';
 const normalizeColor = value => /^#[0-9a-f]{6}$/i.test(value) ? value : '#d5ff18';
 const normalizeWeapon = (value, allowed, fallback) => allowed.has(value) ? value : fallback;
 const vector = value => Array.isArray(value) && value.length >= 3 && value.slice(0,3).every(Number.isFinite) ? value.slice(0,3).map(number => clamp(number,-5000,5000)) : null;
+const quaternion = value => Array.isArray(value) && value.length >= 4 && value.slice(0,4).every(Number.isFinite) ? value.slice(0,4).map(number => clamp(number,-1,1)) : null;
 const playerRecord = (message, socket, id) => ({ id, name:String(message.playerName||'Водитель').slice(0,20), carId:normalizeCar(message.carId), color:normalizeColor(message.color), machineGunId:normalizeWeapon(message.machineGunId,machineGunIds,'scrapgun'), missileLauncherId:normalizeWeapon(message.missileLauncherId,missileLauncherIds,'none'), socket });
 const send = (socket, payload) => {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
@@ -87,12 +88,16 @@ wss.on('connection', socket => {
       broadcast(room, { type: 'player_state', playerId: client.id, state: { position: state.position.slice(0, 3), quaternion: state.quaternion.slice(0, 4), speed:clamp(state.speed,-150,150), health:clamp(state.health,0,100000), maxHealth:clamp(state.maxHealth,1,100000), nitro:clamp(state.nitro,0,100), kills:clamp(state.kills,0,9999), wrecks:clamp(state.wrecks,0,9999), damage:clamp(state.damage,0,10000000), lap:clamp(state.lap,0,999), checkpoint:clamp(state.checkpoint,0,999), boosting:Boolean(state.boosting), dead:Boolean(state.dead) } }, socket);
       return;
     }
+    if (message.type === 'ai_state' && room.status === 'racing' && room.hostId === client.id) {
+      if (!Array.isArray(message.states)) return;const states=message.states.slice(0,room.aiSlots).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,speed:clamp(state.speed,-150,150),health:clamp(state.health,0,100000),maxHealth:clamp(state.maxHealth,1,100000),dead:Boolean(state.dead)};}).filter(Boolean);broadcast(room,{type:'ai_state',states},socket);return;
+    }
     if (message.type === 'combat' && room.status === 'racing') {
       const event=message.event,kind=String(event?.kind||'');if(!combatKinds.has(kind))return;
-      const now=Date.now(),minimumDelay=kind==='machine_gun'?35:90;if(now-(client.lastCombatAt?.[kind]||0)<minimumDelay)return;client.lastCombatAt={...(client.lastCombatAt||{}),[kind]:now};
+      const now=Date.now(),minimumDelay=kind==='machine_gun'||kind==='ai_damage'?35:90;if(now-(client.lastCombatAt?.[kind]||0)<minimumDelay)return;client.lastCombatAt={...(client.lastCombatAt||{}),[kind]:now};
       if(kind==='machine_gun'){const origin=vector(event.origin),impact=vector(event.impact);if(!origin||!impact)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,origin,impact,color:clamp(event.color,0,0xffffff),hit:Boolean(event.hit)}},socket);return;}
       if(kind==='missile_launch'){const origin=vector(event.origin),direction=vector(event.direction);if(!origin||!direction)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,id:String(event.id||'').slice(0,48),origin,direction,speed:clamp(event.speed,10,140),turnRate:clamp(event.turnRate,0,12),life:clamp(event.life,.2,6),targetIndex:clamp(event.targetIndex,-1,99)}},socket);return;}
       if(kind==='vehicle_impact'){const targetId=String(event.targetId||''),impactId=String(event.impactId||'').slice(0,64),position=vector(event.position),direction=vector(event.direction),impulse=vector(event.impulse);if(!room.players.has(targetId)||targetId===client.id||!impactId||!position||!direction||!impulse)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,targetId,impactId,position,direction,impulse,damage:clamp(event.damage,0,30)}},socket);return;}
+      if(kind==='ai_damage'){if(client.id===room.hostId)return;const targetIndex=Math.trunc(clamp(event.targetIndex,0,Math.max(0,room.aiSlots-1))),damage=clamp(event.damage,0,60),host=room.players.get(room.hostId);if(!host||damage<=0)return;send(host.socket,{type:'combat_event',playerId:client.id,event:{kind,targetIndex,damage}});return;}
       const position=vector(event.position);if(!position)return;broadcast(room,{type:'combat_event',playerId:client.id,event:{kind,id:String(event.id||'').slice(0,48),position,intensity:clamp(event.intensity,.25,2.5)}},socket);
     }
   });
