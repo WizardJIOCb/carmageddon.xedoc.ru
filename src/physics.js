@@ -106,8 +106,10 @@ export function createVehicle(world, visual, options) {
 export function driveVehicle(vehicle, input, dt) {
   const { controller, body } = vehicle;
   const speed = controller.currentVehicleSpeed();
-  const targetSteer = THREE.MathUtils.clamp(input.steer, -1, 1) * (.52 - Math.min(.25, Math.abs(speed) * .008));
-  vehicle.steer = THREE.MathUtils.damp(vehicle.steer, targetSteer, 7.5, dt);
+  const steerSensitivity = input.steerSensitivity ?? 1;
+  const steerSmoothing = input.steerSmoothing ?? 7.5;
+  const targetSteer = THREE.MathUtils.clamp(input.steer, -1, 1) * steerSensitivity * (.52 - Math.min(.25, Math.abs(speed) * .008));
+  vehicle.steer = THREE.MathUtils.damp(vehicle.steer, targetSteer, steerSmoothing, dt);
   vehicle.throttle = THREE.MathUtils.damp(vehicle.throttle, input.throttle, 5.5, dt);
   vehicle.brake = THREE.MathUtils.damp(vehicle.brake, input.brake || 0, 10, dt);
 

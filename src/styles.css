@@ -159,6 +159,38 @@ body::before {
 .back-btn { background: none; border: 1px solid #343834; padding: 9px 15px; cursor: pointer; color: #9da19d; text-transform: uppercase; letter-spacing: .1em; }
 .back-btn:hover { color: white; border-color: #777; }
 
+.settings-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: 250px minmax(0,1fr); }
+.settings-tabs { padding: 36px 22px; border-right: 1px solid #292d2a; background: rgba(8,9,9,.72); }
+.settings-tab { display: block; width: 100%; padding: 17px 18px; border: 0; border-left: 3px solid #3b403c; background: #141615; color: #8f9690; text-align: left; cursor: pointer; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
+.settings-tab + .settings-tab { margin-top: 7px; }
+.settings-tab:hover { color: white; border-left-color: white; }
+.settings-tab.active { color: #080908; border-left-color: white; background: var(--acid); }
+.settings-content { padding: clamp(32px,6vw,80px); }
+.settings-section { width: min(900px,100%); }
+.settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-bottom: 34px; border-bottom: 1px solid #303430; padding-bottom: 23px; }
+.settings-heading h3,.about-game h3 { margin: 8px 0 0; font-size: clamp(40px,5vw,72px); line-height: .9; text-transform: uppercase; font-style: italic; }
+.ghost-btn.compact { width: auto; min-width: 130px; }
+.setting-slider { margin: 0 0 27px; }
+.setting-slider label { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 11px; color: #b6bbb7; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; }
+.setting-slider label b { color: var(--acid); font: 15px 'Share Tech Mono'; }
+.setting-slider input { width: 100%; height: 5px; accent-color: var(--acid); cursor: pointer; }
+.setting-toggle { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 22px; margin: 32px 0; padding: 18px; border: 1px solid #303430; background: #141615; cursor: pointer; }
+.setting-toggle span strong,.setting-toggle span small { display: block; }.setting-toggle span strong { text-transform: uppercase; letter-spacing: .07em; }.setting-toggle span small { margin-top: 5px; color: #727873; font: 10px/1.4 'Share Tech Mono'; }
+.setting-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.setting-toggle i { position: relative; flex: 0 0 54px; height: 27px; border: 1px solid #434844; background: #090a09; }
+.setting-toggle i::after { content:''; position:absolute; left:3px; top:3px; width:19px; height:19px; background:#626863; transition:.18s; }
+.setting-toggle input:checked + i { border-color: var(--acid); background: rgba(213,255,24,.1); }.setting-toggle input:checked + i::after { left:29px; background:var(--acid); box-shadow:0 0 13px rgba(213,255,24,.45); }
+.binding-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 34px; }
+.binding-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(115px,.65fr); align-items: center; gap: 14px; min-height: 58px; padding: 8px 10px 8px 17px; border: 1px solid #292d2a; background: #111312; color: #aeb4af; text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
+.key-bind { min-height: 40px; border: 1px solid #444944; background: #202320; color: var(--acid); cursor: pointer; font: 11px 'Share Tech Mono'; letter-spacing: .05em; }
+.key-bind:hover,.key-bind.listening { border-color: var(--acid); color: #090a09; background: var(--acid); }
+.quality-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.quality-card { min-height: 155px; padding: 23px; border: 1px solid #303430; border-left: 4px solid #464b47; background: linear-gradient(135deg,#1b1e1c,#0e100f); color: #d6dad7; text-align: left; cursor: pointer; }
+.quality-card strong,.quality-card span,.quality-card small { display: block; }.quality-card strong { font-size: 25px; text-transform: uppercase; font-style: italic; }.quality-card span { margin: 10px 0 20px; color: #858b86; font: 11px/1.5 'Share Tech Mono'; }.quality-card small { color: #676d68; font: 9px 'Share Tech Mono'; letter-spacing: .08em; }
+.quality-card:hover { border-color: #777d78; transform: translateY(-2px); }.quality-card.active { border-color: var(--acid); background: linear-gradient(135deg,rgba(213,255,24,.16),#101210); }.quality-card.active strong,.quality-card.active small { color: var(--acid); }
+.settings-note { margin-top: 24px; padding: 20px 22px; border-left: 3px solid var(--acid); background: rgba(213,255,24,.05); }.settings-note strong { text-transform: uppercase; letter-spacing: .06em; }.settings-note p,.about-game>p { color: #8a908b; font: 12px/1.7 'Share Tech Mono'; }
+.about-game>p { max-width: 760px; margin: 28px 0; }.about-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 35px 0; }.about-grid div { padding: 20px; border: 1px solid #303430; background: #141615; }.about-grid small,.about-grid strong { display:block; }.about-grid small { color:#6f756f; font:10px 'Share Tech Mono'; text-transform:uppercase; letter-spacing:.12em; }.about-grid strong { margin-top:8px; color:var(--acid); font-size:19px; }.legal-note { border-top:1px solid #303430; padding-top:22px; color:#5f655f!important; }
+
 .garage-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: minmax(320px, 1.25fr) minmax(360px, .75fr); }
 .car-stage { position: relative; min-height: 610px; overflow: hidden; background: radial-gradient(ellipse at 50% 65%, #303631 0, #151817 24%, #080909 64%); }
 .car-stage::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.7%, rgba(213,255,24,.1) 50%, transparent 50.3%), linear-gradient(0deg, transparent 49.7%, rgba(213,255,24,.07) 50%, transparent 50.3%); background-size: 80px 80px; transform: perspective(600px) rotateX(62deg) translateY(38%); opacity: .5; }
@@ -214,5 +246,5 @@ body::before {
 .damage-flash{position:absolute;inset:0;background:radial-gradient(circle,transparent 35%,rgba(180,0,0,.72));opacity:0;transition:opacity .08s;pointer-events:none}.damage-flash.on{opacity:1}
 .toast{position:fixed;left:50%;top:18%;transform:translate(-50%,-20px);z-index:50;opacity:0;padding:10px 20px;background:var(--acid);color:#080808;font-weight:900;text-transform:uppercase;letter-spacing:.12em;pointer-events:none;transition:.3s}.toast.show{opacity:1;transform:translate(-50%,0)}
 
-@media(max-width:950px){.level-list{grid-template-columns:repeat(2,1fr)}.garage-layout{grid-template-columns:1fr}.car-stage{min-height:420px}.garage-controls{border-left:0}.menu-demo{opacity:.38;width:100vw}.menu-column{width:100%;padding-right:25px}.minimap{display:none}}
-@media(max-width:600px){.brand{font-size:58px}.menu-column{padding-left:24px}.tagline{margin-bottom:3vh}.level-list{grid-template-columns:1fr}.level-card{min-height:240px}.hud-top{left:12px;right:12px;top:12px}.hud-bottom{left:12px;right:12px;bottom:12px}.car-vitals{grid-template-columns:repeat(3,64px)}.vital{padding:6px}.vital strong{font-size:15px}.controls-hint{display:none}.speedo{width:130px}.event-feed{display:none}}
+@media(max-width:950px){.level-list{grid-template-columns:repeat(2,1fr)}.garage-layout{grid-template-columns:1fr}.car-stage{min-height:420px}.garage-controls{border-left:0}.menu-demo{opacity:.38;width:100vw}.menu-column{width:100%;padding-right:25px}.minimap{display:none}.settings-layout{grid-template-columns:1fr}.settings-tabs{display:flex;gap:7px;padding:16px 22px;border-right:0;border-bottom:1px solid #292d2a}.settings-tab+.settings-tab{margin-top:0}.settings-content{padding:35px 24px}}
+@media(max-width:600px){.brand{font-size:58px}.menu-column{padding-left:24px}.tagline{margin-bottom:3vh}.level-list{grid-template-columns:1fr}.level-card{min-height:240px}.hud-top{left:12px;right:12px;top:12px}.hud-bottom{left:12px;right:12px;bottom:12px}.car-vitals{grid-template-columns:repeat(3,64px)}.vital{padding:6px}.vital strong{font-size:15px}.controls-hint{display:none}.speedo{width:130px}.event-feed{display:none}.topbar h2{font-size:20px}.currency{display:none}.settings-tabs{overflow:auto}.settings-tab{min-width:145px}.binding-grid,.quality-grid,.about-grid{grid-template-columns:1fr}.binding-row{grid-template-columns:1fr minmax(110px,.75fr)}.settings-heading{align-items:flex-start}.settings-heading h3,.about-game h3{font-size:40px}}
