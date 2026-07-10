@@ -132,7 +132,8 @@ export function driveVehicle(vehicle, input, dt) {
   engine *= vehicle.throttle * (1 - speedRatio * .72);
   if (input.boost) engine *= 1.62;
   if (Math.abs(speed) > vehicle.maxSpeed * (input.boost ? 1.28 : 1) && Math.sign(engine) === Math.sign(speed)) engine = 0;
-  if (vehicle.handbrake > .08) engine *= 1 - vehicle.handbrake * .24;
+  // Keep enough drive on the rear axle to carry a long slide through a corner.
+  if (vehicle.handbrake > .08) engine *= 1 - vehicle.handbrake * .12;
   const bodyRotation = body.rotation();
   const bodyQuaternion = _quat.set(bodyRotation.x, bodyRotation.y, bodyRotation.z, bodyRotation.w);
   const uprightDot = _vehicleUp.set(0, 1, 0).applyQuaternion(bodyQuaternion).y;
@@ -141,9 +142,9 @@ export function driveVehicle(vehicle, input, dt) {
   for (let i = 0; i < 4; i++) {
     const rearWheel = i < 2;
     controller.setWheelEngineForce(i, engine * (i < 2 ? .58 : .42));
-    controller.setWheelBrake(i, vehicle.brake * (rearWheel ? 5.5 : 7.5) + (rearWheel ? vehicle.handbrake * 11.5 : 0));
-    controller.setWheelFrictionSlip(i, rearWheel ? THREE.MathUtils.lerp(3.35, 1.08, vehicle.handbrake) : 3.35);
-    controller.setWheelSideFrictionStiffness(i, rearWheel ? THREE.MathUtils.lerp(1.45, .32, vehicle.handbrake) : 1.45);
+    controller.setWheelBrake(i, vehicle.brake * (rearWheel ? 5.5 : 7.5) + (rearWheel ? vehicle.handbrake * 4.8 : 0));
+    controller.setWheelFrictionSlip(i, rearWheel ? THREE.MathUtils.lerp(3.35, 1.65, vehicle.handbrake) : 3.35);
+    controller.setWheelSideFrictionStiffness(i, rearWheel ? THREE.MathUtils.lerp(1.45, .62, vehicle.handbrake) : 1.45);
   }
   controller.setWheelSteering(2, vehicle.steer);
   controller.setWheelSteering(3, vehicle.steer);
@@ -153,7 +154,15 @@ export function driveVehicle(vehicle, input, dt) {
   const downforce = Math.min(22000, speed * speed * 20);
   body.applyImpulse({ x: 0, y: -downforce * dt, z: 0 }, true);
   const driftDirection = Math.abs(vehicle.steer) > .035 ? Math.sign(vehicle.steer) : Math.sign(input.steer || 0);
-  if (vehicle.handbrake > .08 && Math.abs(speed) > 5 && driftDirection) body.applyTorqueImpulse({ x: 0, y: driftDirection * vehicle.dimensions.mass * 2.25 * vehicle.handbrake * dt, z: 0 }, true);
+  const yawRate = body.angvel().y;
+  // The handbrake only starts the rotation. Once the car is sliding, remove the assist
+  // instead of continually adding yaw velocity and forcing a 180-degree spin.
+  if (vehicle.handbrake > .08 && Math.abs(speed) > 5 && driftDirection) {
+    const yawCap = .92 + Math.min(.16, Math.abs(speed) * .004);
+    const sameDirection = yawRate * driftDirection > 0;
+    const assist = sameDirection ? Math.max(0, 1 - Math.abs(yawRate) / yawCap) : 1;
+    if (assist > .01) body.applyTorqueImpulse({ x: 0, y: driftDirection * vehicle.dimensions.mass * .74 * vehicle.handbrake * assist * dt, z: 0 }, true);
+  }
   stabilizeVehicle(vehicle, dt, uprightDot);
 }
 
