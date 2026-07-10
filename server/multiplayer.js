@@ -32,6 +32,7 @@ const roomSnapshot = room => ({
   status: room.status,
   hostId: room.hostId,
   raceNumber: room.raceNumber || 0,
+  raceStartedAt: room.raceStartedAt || 0,
   finishedCount: room.finishedPlayers?.size || 0,
   lastResults: room.lastResults || [],
   players: [...room.players.values()].map(player => ({ id: player.id, name: player.name, carId: player.carId, color: player.color, machineGunId:player.machineGunId, missileLauncherId:player.missileLauncherId })),
@@ -45,6 +46,7 @@ const broadcastRoom = room => {
   for (const client of wss.clients) send(client, { type: 'rooms', rooms: publicRooms() });
 };
 const publicRoomsUpdate = () => { for (const client of wss.clients) send(client, { type: 'rooms', rooms: publicRooms() }); };
+const maybeStartRace = room => {if(room.status!=='loading'||!room.players.size||![...room.players.keys()].every(id=>room.readyPlayers?.has(id)))return false;room.status='racing';room.raceStartedAt=Date.now()+1800;broadcast(room,{type:'race_go',startsAt:room.raceStartedAt,room:roomSnapshot(room)});publicRoomsUpdate();return true;};
 const raceResults = room => [...(room.finishedPlayers?.values()||[])];
 const maybeCompleteRace = room => {
   if(room.status!=='racing'||!room.players.size||![...room.players.keys()].every(id=>room.finishedPlayers?.has(id)))return false;
@@ -55,18 +57,19 @@ const leaveRoom = client => {
   if (!room) return;
   room.players.delete(client.id);
   room.finishedPlayers?.delete(client.id);
+  room.readyPlayers?.delete(client.id);
   client.roomId = null;
   if (!room.players.size) rooms.delete(room.id);
   else {
     if (room.hostId === client.id) room.hostId = room.players.keys().next().value;
-    if(!maybeCompleteRace(room))broadcastRoom(room);
+    if(!maybeStartRace(room)&&!maybeCompleteRace(room))broadcastRoom(room);
   }
   publicRoomsUpdate();
 };
 
 wss.on('connection', socket => {
   const client = { id: randomUUID(), roomId: null };
-  send(socket, { type: 'welcome', playerId: client.id, rooms: publicRooms() });
+  send(socket, { type: 'welcome', playerId: client.id, serverTime:Date.now(), rooms: publicRooms() });
   socket.on('message', raw => {
     let message;
     try { message = JSON.parse(raw.toString()); } catch { return send(socket, { type: 'error', message: 'Некорректный пакет' }); }
@@ -76,7 +79,7 @@ wss.on('connection', socket => {
       const slots = Math.trunc(clamp(message.slots, 2, 12)), aiSlots = Math.trunc(clamp(message.aiSlots, 0, slots - 1)), room = {
         id: Math.random().toString(36).slice(2, 8).toUpperCase(),
         name: String(message.roomName || 'Бойня').trim().slice(0, 28) || 'Бойня',
-        levelId: clamp(message.levelId, 0, 9), slots, aiSlots, status: 'lobby', hostId: client.id, players: new Map(), raceNumber:0, finishedPlayers:new Map(), lastResults:[],
+        levelId: clamp(message.levelId, 0, 9), slots, aiSlots, status: 'lobby', hostId: client.id, players: new Map(), raceNumber:0, raceStartedAt:0, readyPlayers:new Set(), finishedPlayers:new Map(), lastResults:[],
       };
       room.players.set(client.id, playerRecord(message,socket,client.id));
       rooms.set(room.id, room);client.roomId = room.id;broadcastRoom(room);return;
@@ -93,8 +96,9 @@ wss.on('connection', socket => {
       room.slots = Math.trunc(clamp(message.slots,Math.max(2,room.players.size),12));room.aiSlots = Math.trunc(clamp(message.aiSlots,0,room.slots-room.players.size));room.levelId = Math.trunc(clamp(message.levelId,0,9));broadcastRoom(room);return;
     }
     if (message.type === 'start' && room.hostId === client.id && room.status === 'lobby') {
-      room.status = 'racing';room.raceNumber=(room.raceNumber||0)+1;room.finishedPlayers=new Map();broadcast(room, { type: 'race_started', room: roomSnapshot(room) });publicRoomsUpdate();return;
+      room.status = 'loading';room.raceNumber=(room.raceNumber||0)+1;room.raceStartedAt=0;room.readyPlayers=new Set();room.finishedPlayers=new Map();broadcast(room,{type:'race_started',room:roomSnapshot(room)});publicRoomsUpdate();return;
     }
+    if(message.type==='race_ready'&&room.status==='loading'){room.readyPlayers.add(client.id);broadcast(room,{type:'race_loading',ready:room.readyPlayers.size,total:room.players.size});maybeStartRace(room);return;}
     if(message.type==='race_finished'&&room.status==='racing'){
       if(room.finishedPlayers.has(client.id))return;const result=message.result||{},player=room.players.get(client.id),record={playerId:client.id,name:player?.name||'Водитель',win:Boolean(result.win),reason:String(result.reason||'ЗАЕЗД ЗАВЕРШЁН').slice(0,80),time:clamp(result.time,0,86400),kills:clamp(result.kills,0,9999),wrecks:clamp(result.wrecks,0,9999),damage:clamp(result.damage,0,10000000),reward:clamp(result.reward,0,10000000)};room.finishedPlayers.set(client.id,record);broadcast(room,{type:'race_progress',finished:room.finishedPlayers.size,total:room.players.size,results:raceResults(room)});maybeCompleteRace(room);return;
     }
@@ -106,7 +110,7 @@ wss.on('connection', socket => {
       if (!Array.isArray(message.states)) return;const states=message.states.slice(0,room.aiSlots).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,speed:clamp(state.speed,-150,150),health:clamp(state.health,0,100000),maxHealth:clamp(state.maxHealth,1,100000),dead:Boolean(state.dead)};}).filter(Boolean);broadcast(room,{type:'ai_state',states},socket);return;
     }
     if (message.type === 'world_state' && room.status === 'racing' && room.hostId === client.id) {
-      if(!Array.isArray(message.pedestrians))return;const pedestrians=message.pedestrians.slice(0,128).map((state,index)=>{const position=vector(state?.position);if(!position)return null;return{index,position,rotationY:clamp(state.rotationY,-Math.PI*4,Math.PI*4),running:Boolean(state.running),dead:Boolean(state.dead)};}).filter(Boolean),destructibles=Array.isArray(message.destructibles)?message.destructibles.slice(0,512).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,broken:Boolean(state.broken)};}).filter(Boolean):[],broken=Array.isArray(message.broken)?message.broken.slice(0,512).map(value=>Math.trunc(clamp(value,0,511))):[];broadcast(room,{type:'world_state',pedestrians,destructibles,broken},socket);return;
+      if(!Array.isArray(message.pedestrians))return;const pedestrians=message.pedestrians.slice(0,128).map((state,index)=>{const position=vector(state?.position);if(!position)return null;return{index,position,rotationY:clamp(state.rotationY,-Math.PI*4,Math.PI*4),running:Boolean(state.running),dead:Boolean(state.dead)};}).filter(Boolean),destructibles=Array.isArray(message.destructibles)?message.destructibles.slice(0,512).map((state,index)=>{const position=vector(state?.position),rotation=quaternion(state?.quaternion);if(!position||!rotation)return null;return{index,position,quaternion:rotation,broken:Boolean(state.broken)};}).filter(Boolean):[],ragdolls=Array.isArray(message.ragdolls)?message.ragdolls.slice(0,128).map(state=>{const index=Math.trunc(clamp(state?.index,0,127)),pieces=Array.isArray(state?.pieces)?state.pieces.slice(0,16).map(piece=>{const position=vector(piece?.position),rotation=quaternion(piece?.quaternion);return position&&rotation?{position,quaternion:rotation}:null;}).filter(Boolean):[];return pieces.length?{index,pieces}:null;}).filter(Boolean):[],broken=Array.isArray(message.broken)?message.broken.slice(0,512).map(value=>Math.trunc(clamp(value,0,511))):[];broadcast(room,{type:'world_state',pedestrians,destructibles,ragdolls,broken},socket);return;
     }
     if (message.type === 'world_event' && room.status === 'racing' && room.hostId === client.id) {const event=worldEvent(message.event);if(event)broadcast(room,{type:'world_event',event},socket);return;}
     if (message.type === 'world_interaction' && room.status === 'racing' && room.hostId !== client.id) {const event=worldEvent(message.event),host=room.players.get(room.hostId);if(event&&host)send(host.socket,{type:'world_interaction',playerId:client.id,event});return;}
