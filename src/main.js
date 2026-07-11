@@ -33,7 +33,8 @@ const DEFAULT_SETTINGS = {
   audioWeapons: .9,
   audioEffects: .85,
   audioUI: .65,
-  audioMuted: false,
+  audioMuted: true,
+  audioOptInVersion: 1,
   controlLayoutVersion: 4,
   bindings: { accelerate:'KeyW', brake:'KeyS', left:'KeyA', right:'KeyD', handbrake:'Space', fire:'KeyF', secondaryFire:'KeyE', nitro:'ShiftLeft', repair:'KeyQ', reset:'KeyR', pause:'Escape' },
 };
@@ -143,7 +144,7 @@ function loadSave() {
   catch { return structuredClone(DEFAULT_SAVE); }
 }
 function persist() { localStorage.setItem('wreckrun-save', JSON.stringify(save)); }
-function loadSettings(){try{const stored=JSON.parse(localStorage.getItem('wreckrun-settings')||'{}'),version=stored.controlLayoutVersion||0,loaded={...structuredClone(DEFAULT_SETTINGS),...stored,bindings:{...DEFAULT_SETTINGS.bindings,...(stored.bindings||{})}};if(version<2){loaded.bindings.handbrake='Space';loaded.bindings.fire='KeyF';}if(version<3)loaded.bindings.repair='KeyQ';if(version<4){const occupied=Object.entries(loaded.bindings).find(([id,code])=>id!=='secondaryFire'&&code==='KeyE');if(occupied)loaded.bindings[occupied[0]]=DEFAULT_SETTINGS.bindings[occupied[0]];loaded.bindings.secondaryFire='KeyE';}if(version<DEFAULT_SETTINGS.controlLayoutVersion){loaded.controlLayoutVersion=DEFAULT_SETTINGS.controlLayoutVersion;localStorage.setItem('wreckrun-settings',JSON.stringify(loaded));}return loaded;}catch{return structuredClone(DEFAULT_SETTINGS);}}
+function loadSettings(){try{const stored=JSON.parse(localStorage.getItem('wreckrun-settings')||'{}'),version=stored.controlLayoutVersion||0,loaded={...structuredClone(DEFAULT_SETTINGS),...stored,bindings:{...DEFAULT_SETTINGS.bindings,...(stored.bindings||{})}};if(version<2){loaded.bindings.handbrake='Space';loaded.bindings.fire='KeyF';}if(version<3)loaded.bindings.repair='KeyQ';if(version<4){const occupied=Object.entries(loaded.bindings).find(([id,code])=>id!=='secondaryFire'&&code==='KeyE');if(occupied)loaded.bindings[occupied[0]]=DEFAULT_SETTINGS.bindings[occupied[0]];loaded.bindings.secondaryFire='KeyE';}if((stored.audioOptInVersion||0)<DEFAULT_SETTINGS.audioOptInVersion){loaded.audioMuted=true;loaded.audioOptInVersion=DEFAULT_SETTINGS.audioOptInVersion;}if(version<DEFAULT_SETTINGS.controlLayoutVersion||loaded.audioOptInVersion!==stored.audioOptInVersion){loaded.controlLayoutVersion=DEFAULT_SETTINGS.controlLayoutVersion;localStorage.setItem('wreckrun-settings',JSON.stringify(loaded));}return loaded;}catch{return structuredClone(DEFAULT_SETTINGS);}}
 function persistSettings(){localStorage.setItem('wreckrun-settings',JSON.stringify(settings));}
 function graphicsPreset(){return GRAPHICS_PRESETS[settings.graphics]||GRAPHICS_PRESETS.high;}
 function keyLabel(code){return({Space:'ПРОБЕЛ',ShiftLeft:'ЛЕВЫЙ SHIFT',ShiftRight:'ПРАВЫЙ SHIFT',Escape:'ESC',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',ControlLeft:'ЛЕВЫЙ CTRL',ControlRight:'ПРАВЫЙ CTRL'}[code]||code.replace(/^Key/,'').replace(/^Digit/,''));}
