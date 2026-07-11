@@ -26,8 +26,8 @@ export function createArenaColliders(world, halfSize = 130) {
     const collider = world.createCollider(
       RAPIER.ColliderDesc.cuboid(hx, hy, hz)
         .setTranslation(x, y, z)
-        .setFriction(1.18)
-        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
+        .setFriction(.2)
+        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
         .setRestitution(.035),
     );
     collider.userData = { type: 'barrier' };
@@ -62,7 +62,7 @@ export function createVehicle(world, visual, options) {
     RAPIER.ColliderDesc.roundCuboid(halfWidth, halfHeight, halfLength, .1)
       .setTranslation(0, .1, 0)
       .setFriction(1.08)
-      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Max)
+      .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
       .setRestitution(.035)
       .setMassProperties(mass, { x: 0, y: -Math.min(.22, options.height * .22), z: 0 }, principalInertia, { x: 0, y: 0, z: 0, w: 1 })
       .setCollisionGroups(0x00040007)
