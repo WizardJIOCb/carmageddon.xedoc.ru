@@ -20,7 +20,7 @@ const vector = value => Array.isArray(value) && value.length >= 3 && value.slice
 const impulseVector = value => Array.isArray(value) && value.length >= 3 && value.slice(0,3).every(Number.isFinite) ? value.slice(0,3).map(number => clamp(number,-8000,8000)) : null;
 const quaternion = value => Array.isArray(value) && value.length >= 4 && value.slice(0,4).every(Number.isFinite) ? value.slice(0,4).map(number => clamp(number,-1,1)) : null;
 const vectorDistance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
-const worldEvent = event => { const kind=String(event?.kind||''),index=Math.trunc(clamp(event?.index,0,511)),direction=vector(event?.direction);if(!['destructible_break','pedestrian_hit'].includes(kind)||!direction)return null;return{kind,index,direction,strength:clamp(event?.strength,0,30)}; };
+const worldEvent = event => { const kind=String(event?.kind||''),index=Math.trunc(clamp(event?.index,0,511)),direction=vector(event?.direction);if(!['destructible_break','pedestrian_hit','repair_pickup','repair_respawn'].includes(kind)||!direction)return null;return{kind,index,direction,strength:clamp(event?.strength,0,30)}; };
 const playerRecord = (message, socket, id) => ({ id, name:String(message.playerName||'Водитель').slice(0,20), carId:normalizeCar(message.carId), color:normalizeColor(message.color), machineGunId:normalizeWeapon(message.machineGunId,machineGunIds,'scrapgun'), missileLauncherId:normalizeWeapon(message.missileLauncherId,missileLauncherIds,'none'), shieldId:normalizeWeapon(message.shieldId,shieldIds,'none'), socket });
 const send = (socket, payload) => {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));

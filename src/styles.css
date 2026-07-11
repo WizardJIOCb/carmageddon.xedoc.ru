@@ -396,3 +396,5 @@ body::before {
   .mobile-weapon { width:54px; }
   .result-stats { grid-template-columns:1fr; }
 }
+
+.map-repair{fill:#66ffad;stroke:#e1fff0;stroke-width:.45;filter:drop-shadow(0 0 2px #46ff9b);transition:opacity .15s}
