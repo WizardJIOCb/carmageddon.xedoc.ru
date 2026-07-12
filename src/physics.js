@@ -109,6 +109,7 @@ export function createVehicle(world, visual, options) {
     maxSpeed: options.maxSpeed,
     engineForce: options.engineForce,
     reverseForce: options.engineForce * .62,
+    wheelConnectionY: wheelY,
     tiltTime: 0,
     rightingCount: 0,
   };
@@ -219,6 +220,23 @@ function stabilizeVehicle(vehicle, dt, uprightDot) {
   }
 }
 
+export function syncWheelSuspension(pivot, length, connectionY = .08) {
+  if (length == null) return;
+  const baseBottomY = pivot.userData.baseBottomY;
+  const wheelRadius = pivot.userData.physicsWheelRadius;
+  const suspensionScaleY = pivot.userData.suspensionScaleY || pivot.userData.modelScale || 1;
+  if (Number.isFinite(baseBottomY) && Number.isFinite(wheelRadius) && Math.abs(suspensionScaleY) > .0001) {
+    const contactY = connectionY - length - wheelRadius;
+    pivot.position.y = pivot.userData.baseY + (contactY - baseBottomY) / suspensionScaleY;
+    return;
+  }
+  const baseCenterY = pivot.userData.baseCenterY;
+  const modelScale = pivot.userData.modelScale || 1;
+  pivot.position.y = Number.isFinite(baseCenterY)
+    ? pivot.userData.baseY + (connectionY - length - baseCenterY) / modelScale
+    : pivot.userData.baseY - (length - .38 + .065) / modelScale;
+}
+
 export function syncVehicle(vehicle) {
   const position = vehicle.body.translation();
   const rotation = vehicle.body.rotation();
@@ -226,8 +244,7 @@ export function syncVehicle(vehicle) {
   vehicle.visual.group.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
   vehicle.visual.wheels.forEach((pivot, index) => {
     const length = vehicle.controller.wheelSuspensionLength(index);
-    const modelScale=pivot.userData.modelScale||1;
-    if (length != null) pivot.position.y = pivot.userData.baseY - (length - .38 + .065) / modelScale;
+    syncWheelSuspension(pivot, length, vehicle.wheelConnectionY);
     pivot.rotation.y = (pivot.userData.baseRotationY || 0) + (index >= 2 ? vehicle.steer : 0);
     const rolling = pivot.userData.rollingMesh;
     if (rolling) rolling.rotation.x = (pivot.userData.baseRollX || 0) + (vehicle.controller.wheelRotation(index) || 0);

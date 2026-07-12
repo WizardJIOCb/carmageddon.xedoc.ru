@@ -180,6 +180,13 @@ export class ModelLibrary {
       if (position && !object.name.startsWith('wheel-')) object.userData.pristinePositions = new Float32Array(position.array);
     });
     group.add(body);
+    group.updateMatrixWorld(true);
+    wheels.forEach(pivot => {
+      pivot.userData.baseCenterY = pivot.getWorldPosition(new THREE.Vector3()).y;
+      pivot.userData.baseBottomY = new THREE.Box3().setFromObject(pivot).min.y;
+      pivot.userData.suspensionScaleY = pivot.parent?.matrixWorld.elements[5] || scale;
+      pivot.userData.physicsWheelRadius = dimensions.wheelRadius;
+    });
 
     return { group, body, wheels };
   }

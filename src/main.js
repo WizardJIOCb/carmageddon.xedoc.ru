@@ -10,6 +10,7 @@ import {
   createVehicle,
   driveVehicle,
   syncVehicle,
+  syncWheelSuspension,
   forwardVector,
   createRagdoll,
   syncRagdoll,
@@ -355,7 +356,7 @@ class WreckrunGame {
     const quality=graphicsPreset();
     const daylight=this.level.id===0;this.scene=new THREE.Scene();this.scene.background=new THREE.Color(this.level.sky);this.scene.fog=new THREE.FogExp2(this.level.fog,daylight?.0042:.0085);
     const hemi=new THREE.HemisphereLight(daylight?0xcfeaff:this.level.accent,daylight?0x5a4634:0x17120f,daylight?2.15:1.6);this.scene.add(hemi);
-    const sun=new THREE.DirectionalLight(daylight?0xfff1cf:0xffe0c0,daylight?3.6:2.4);sun.position.set(daylight?-48:-35,daylight?78:60,daylight?-36:-25);sun.castShadow=quality.shadows;sun.shadow.mapSize.set(quality.shadowSize,quality.shadowSize);sun.shadow.camera.left=-96;sun.shadow.camera.right=96;sun.shadow.camera.top=96;sun.shadow.camera.bottom=-96;sun.shadow.camera.near=1;sun.shadow.camera.far=190;sun.shadow.bias=-.00018;sun.shadow.normalBias=.045;sun.shadow.radius=2;this.scene.add(sun);
+    const sun=new THREE.DirectionalLight(daylight?0xfff1cf:0xffe0c0,daylight?3.6:2.4);sun.position.set(daylight?-48:-35,daylight?78:60,daylight?-36:-25);sun.castShadow=quality.shadows;sun.shadow.mapSize.set(quality.shadowSize,quality.shadowSize);sun.shadow.camera.left=-96;sun.shadow.camera.right=96;sun.shadow.camera.top=96;sun.shadow.camera.bottom=-96;sun.shadow.camera.near=1;sun.shadow.camera.far=190;sun.shadow.bias=-.00012;sun.shadow.normalBias=.016;sun.shadow.radius=2;this.scene.add(sun);
     this.scene.add(new THREE.AmbientLight(daylight?0x71808a:0x252a31,daylight?.72:.55));
     for(let i=0;i<4;i++){const light=new THREE.PointLight(0xff4317,0,30,2);light.visible=true;this.scene.add(light);this.effectLights.push({light,life:0,duration:0,peak:0,owner:null});}
   }
@@ -514,13 +515,13 @@ class WreckrunGame {
   updateRaceStartGate(){if(!this.multiplayer||this.raceStarted)return;if(!this.raceStartsAt)return;const remaining=(this.raceStartsAt-this.networkNow())/1000,label=this.raceLoadingOverlay?.querySelector('[data-race-loading]');if(remaining>0){if(label)label.textContent=`СТАРТ ЧЕРЕЗ ${Math.max(1,Math.ceil(remaining))}`;return;}this.raceStarted=true;this.elapsed=0;this.raceLoadingOverlay?.remove();this.raceLoadingOverlay=null;}
 
   syncNetworkAIWheels(dt){
-    if(this.isMultiplayerHost)return;for(const ai of this.opponents){const d=ai.userData;if(!d.networkStateReceived)continue;d.networkWheelSpin-=d.networkSpeed*dt*.72;d.wheels?.forEach((wheel,index)=>{const length=d.networkSuspension[index],modelScale=wheel.userData.modelScale||1;if(length!=null)wheel.position.y=wheel.userData.baseY-(length-.38+.065)/modelScale;wheel.rotation.y=(wheel.userData.baseRotationY||0)+(index>=2?d.networkSteer:0);const rolling=wheel.userData.rollingMesh;if(rolling)rolling.rotation.x=(wheel.userData.baseRollX||0)+d.networkWheelSpin;});}
+    if(this.isMultiplayerHost)return;for(const ai of this.opponents){const d=ai.userData;if(!d.networkStateReceived)continue;d.networkWheelSpin-=d.networkSpeed*dt*.72;d.wheels?.forEach((wheel,index)=>{const length=d.networkSuspension[index];syncWheelSuspension(wheel,length);wheel.rotation.y=(wheel.userData.baseRotationY||0)+(index>=2?d.networkSteer:0);const rolling=wheel.userData.rollingMesh;if(rolling)rolling.rotation.x=(wheel.userData.baseRollX||0)+d.networkWheelSpin;});}
   }
 
   updateRemotePlayer(remote,dt){
     const body=remote.body,position=body.translation(),rotation=body.rotation();remote.group.position.set(position.x,position.y,position.z);remote.group.quaternion.set(rotation.x,rotation.y,rotation.z,rotation.w);
     if(!remote.dead&&this.elapsed>=remote.collisionHoldUntil){const error=remote.targetPosition.clone().sub(remote.group.position),distance=error.length(),forward=new THREE.Vector3(0,0,1).applyQuaternion(remote.targetQuaternion),desired=forward.multiplyScalar(remote.speed||0);if(distance>7){body.setTranslation({x:remote.targetPosition.x,y:remote.targetPosition.y,z:remote.targetPosition.z},true);body.setLinvel({x:desired.x,y:0,z:desired.z},true);remote.group.position.copy(remote.targetPosition);}else{const correction=error.multiplyScalar(7);if(correction.length()>14)correction.setLength(14);desired.add(correction);const velocity=body.linvel(),blend=1-Math.exp(-dt*9);body.setLinvel({x:THREE.MathUtils.lerp(velocity.x,desired.x,blend),y:THREE.MathUtils.lerp(velocity.y,desired.y,blend),z:THREE.MathUtils.lerp(velocity.z,desired.z,blend)},true);}const targetRotation=new THREE.Quaternion(rotation.x,rotation.y,rotation.z,rotation.w).slerp(remote.targetQuaternion,1-Math.exp(-dt*12));body.setRotation({x:targetRotation.x,y:targetRotation.y,z:targetRotation.z,w:targetRotation.w},true);}
-    remote.displaySteer=THREE.MathUtils.damp(remote.displaySteer,remote.steer,16,dt);remote.wheelSpin-=remote.speed*dt*.72;remote.wheels?.forEach((wheel,index)=>{const length=remote.suspension[index],modelScale=wheel.userData.modelScale||1;if(length!=null)wheel.position.y=wheel.userData.baseY-(length-.38+.065)/modelScale;wheel.rotation.y=(wheel.userData.baseRotationY||0)+(index>=2?remote.displaySteer:0);const rolling=wheel.userData.rollingMesh;if(rolling)rolling.rotation.x=(wheel.userData.baseRollX||0)+remote.wheelSpin;});remote.boostEmit-=dt;if(remote.boosting&&!remote.dead&&remote.boostEmit<=0){remote.boostEmit=.04;this.emitBoostFlames(remote.group);}
+    remote.displaySteer=THREE.MathUtils.damp(remote.displaySteer,remote.steer,16,dt);remote.wheelSpin-=remote.speed*dt*.72;remote.wheels?.forEach((wheel,index)=>{const length=remote.suspension[index];syncWheelSuspension(wheel,length);wheel.rotation.y=(wheel.userData.baseRotationY||0)+(index>=2?remote.displaySteer:0);const rolling=wheel.userData.rollingMesh;if(rolling)rolling.rotation.x=(wheel.userData.baseRollX||0)+remote.wheelSpin;});remote.boostEmit-=dt;if(remote.boosting&&!remote.dead&&remote.boostEmit<=0){remote.boostEmit=.04;this.emitBoostFlames(remote.group);}
   }
 
   updateMultiplayer(dt){
