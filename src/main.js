@@ -366,7 +366,6 @@ class WreckrunGame {
 
   setupWorld(){
     const mapSize=this.level.mapSize||260,groundTexture=makeSurfaceTexture(this.renderer,`ground-${this.level.season||'arena'}`,this.level.ground),groundMaterial=this.models.enhancedSurfaceMaterial(this.level.ground)||new THREE.MeshStandardMaterial({color:this.level.ground,map:groundTexture,roughness:.96,metalness:.04}),ground=new THREE.Mesh(new THREE.PlaneGeometry(mapSize,mapSize),groundMaterial);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;this.scene.add(ground);
-    const grid=new THREE.GridHelper(mapSize,Math.round(mapSize/2),new THREE.Color(this.level.accent).multiplyScalar(.25),new THREE.Color(0x252525));grid.position.y=.025;grid.material.opacity=this.level.route?.08:.18;grid.material.transparent=true;this.scene.add(grid);
     this.waypoints=(this.level.route||[[-55,-38],[0,-54],[55,-38],[66,0],[55,38],[0,54],[-55,38],[-66,0]]).map(([x,z])=>new THREE.Vector3(x,0,z));this.minimapBounds={x:mapSize*.55,z:mapSize*.55};
     this.buildTrack();this.buildCity();
     const obstacleRng=mulberry32(1949+this.level.id*977),obstacleCount=this.level.route?Math.round(mapSize/10):18;for(let i=0;i<obstacleCount;i++){const point=this.waypoints[Math.floor(obstacleRng()*this.waypoints.length)],x=point.x+(obstacleRng()-.5)*(this.level.roadWidth||18)*.7,z=point.z+(obstacleRng()-.5)*(this.level.roadWidth||18)*.7;if(i<3&&point===this.waypoints[0])continue;this.makeObstacle(x,z,obstacleRng);}
