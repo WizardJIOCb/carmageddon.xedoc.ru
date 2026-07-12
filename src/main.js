@@ -203,7 +203,7 @@ function showMenu() {
   document.querySelector('[data-action="garage"]').onclick = showGarage;
   document.querySelector('[data-action="quick"]').onclick = () => showBriefing(save.unlockedLevel);
   document.querySelector('[data-action="multiplayer"]').onclick = showMultiplayer;
-  document.querySelector('[data-action="leaderboards"]').onclick = showLeaderboards;
+  document.querySelector('[data-action="leaderboards"]').onclick = () => showLeaderboards();
   document.querySelector('[data-action="account"]').onclick = showAccount;
   document.querySelector('[data-action="settings"]').onclick = () => showSettings('controls');
   document.querySelector('[data-action="reset"]').onclick = () => {
@@ -216,7 +216,7 @@ function showAccount(mode='login', error='') {
   stopShowroom();
   if (online.user) {
     app.innerHTML=`<section class="screen panel-screen account-screen">${topbar('Профиль // <span>онлайн</span>')}<main class="account-wrap"><section class="account-card"><div class="eyebrow">DRIVER ID // ACTIVE</div><h3>${escapeHtml(online.user.username)}</h3><p>Результаты побед автоматически отправляются в глобальные рейтинги. Токен входа хранится только в этом браузере.</p><div class="modal-actions"><button class="action-btn" data-open-ratings>Открыть рейтинги</button><button class="ghost-btn" data-logout>Выйти из профиля</button></div></section></main></section>`;
-    bindBack();document.querySelector('[data-open-ratings]').onclick=showLeaderboards;document.querySelector('[data-logout]').onclick=async()=>{await online.logout();showMenu();};return;
+    bindBack();document.querySelector('[data-open-ratings]').onclick=()=>showLeaderboards();document.querySelector('[data-logout]').onclick=async()=>{await online.logout();showMenu();};return;
   }
   const register=mode==='register';
   app.innerHTML=`<section class="screen panel-screen account-screen">${topbar(`${register?'Регистрация':'Авторизация'} // <span>driver network</span>`)}<main class="account-wrap"><form class="account-card" data-auth-form><div class="eyebrow">${register?'NEW DRIVER':'IDENTIFY DRIVER'}</div><h3>${register?'Создать профиль':'Войти в профиль'}</h3><label>Имя водителя<input name="username" autocomplete="username" minlength="3" maxlength="20" required placeholder="3–20 символов"></label><label>Пароль<input name="password" type="password" autocomplete="${register?'new-password':'current-password'}" minlength="8" maxlength="128" required placeholder="Минимум 8 символов"></label>${error?`<p class="form-error">${escapeHtml(error)}</p>`:''}<button class="action-btn" type="submit">${register?'Зарегистрироваться':'Войти'}</button><button class="ghost-btn" type="button" data-switch-auth>${register?'Уже есть профиль':'Создать новый профиль'}</button></form></main></section>`;
@@ -227,6 +227,7 @@ function showAccount(mode='login', error='') {
 async function showLeaderboards(metric='score', levelId='all') {
   stopShowroom();
   const metrics={score:'Боевой рейтинг',fastest:'Быстрые победы',wins:'Победы',kills:'Убийства',wrecks:'Машины',destructions:'Разрушения',damage:'Урон'};
+  if(!Object.hasOwn(metrics,metric))metric='score';
   app.innerHTML=`<section class="screen panel-screen leaderboard-screen">${topbar('Рейтинги // <span>global network</span>')}<main class="leaderboard-wrap"><section class="leaderboard-head"><div><div class="eyebrow">WRECK INDUSTRIES // LIVE RECORDS</div><h3>Зал славы</h3></div><div class="leaderboard-filters"><label>Дисциплина<select data-rating-metric>${Object.entries(metrics).map(([id,label])=>`<option value="${id}" ${id===metric?'selected':''}>${label}</option>`).join('')}</select></label><label>Карта<select data-rating-level><option value="all">Все карты</option>${LEVELS.map(level=>`<option value="${level.id}" ${String(level.id)===String(levelId)?'selected':''}>${String(level.id+1).padStart(2,'0')} // ${level.name}</option>`).join('')}</select></label></div></section><section class="leaderboard-table" data-rating-content><p class="rating-loading">Загрузка рейтинга…</p></section>${online.user?'':`<p class="rating-note">Войдите в профиль, чтобы ваши заезды попадали в таблицу.</p>`}</main></section>`;
   bindBack();const metricSelect=document.querySelector('[data-rating-metric]'),levelSelect=document.querySelector('[data-rating-level]');metricSelect.onchange=()=>showLeaderboards(metricSelect.value,levelSelect.value);levelSelect.onchange=()=>showLeaderboards(metricSelect.value,levelSelect.value);
   try {
