@@ -11,4 +11,11 @@ Included packs:
 
 The original CC0 license text is stored in `KENNEY_CC0_LICENSE.txt`.
 
+## Poly Haven — Worn Asphalt
+
+- Source: https://polyhaven.com/a/worn_asphalt
+- Files: `textures/worn-asphalt/diffuse.jpg`, `normal-gl.jpg`, `roughness.jpg`
+- Author: Amal Kumar
+- License: CC0 1.0 Universal / Public Domain
+
 The game code uses [Rapier](https://rapier.rs/) for rigid-body simulation under the Apache-2.0 license.

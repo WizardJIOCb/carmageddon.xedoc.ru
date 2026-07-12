@@ -55,13 +55,15 @@ const PERSON_SKINS = [
 ];
 
 export class ModelLibrary {
-  constructor(renderer) {
+  constructor(renderer, enhancements = {}) {
     this.renderer = renderer;
+    this.enhancements = enhancements;
     this.models = new Map();
     this.textures = [];
     this.gltf = new GLTFLoader();
     this.fbx = new FBXLoader();
     this.textureLoader = new THREE.TextureLoader();
+    this.surfaceTextures = {};
   }
 
   async preload(onProgress = () => {}) {
@@ -89,7 +91,28 @@ export class ModelLibrary {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
     });
+    if (this.enhancements.ground) {
+      const [map, normalMap, roughnessMap] = await Promise.all([
+        this.textureLoader.loadAsync('/assets/textures/worn-asphalt/diffuse.jpg'),
+        this.textureLoader.loadAsync('/assets/textures/worn-asphalt/normal-gl.jpg'),
+        this.textureLoader.loadAsync('/assets/textures/worn-asphalt/roughness.jpg'),
+      ]);
+      for (const texture of [map, normalMap, roughnessMap]) {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(38, 38);
+        texture.anisotropy = Math.min(12, this.renderer.capabilities.getMaxAnisotropy());
+      }
+      map.colorSpace = THREE.SRGBColorSpace;
+      this.surfaceTextures = { map, normalMap, roughnessMap };
+    }
     onProgress(1);
+  }
+
+  enhancedSurfaceMaterial(color, road = false) {
+    if (!this.enhancements.ground || !this.surfaceTextures.map) return null;
+    const material = new THREE.MeshStandardMaterial({color, ...this.surfaceTextures, roughness:.92, metalness:.02});
+    material.normalScale.set(road ? .42 : .7, road ? .42 : .7);
+    return material;
   }
 
   cloneAsset(key) {
@@ -147,6 +170,11 @@ export class ModelLibrary {
         material.color?.lerp(new THREE.Color(color), .46);
         material.roughness = Math.min(.72, material.roughness ?? .55);
         material.metalness = Math.max(.18, material.metalness ?? .1);
+        if (this.enhancements.cars) {
+          material.roughness = Math.min(.42, material.roughness);
+          material.metalness = Math.max(.32, material.metalness);
+          if ('clearcoat' in material) { material.clearcoat=.72; material.clearcoatRoughness=.2; }
+        }
       });
       const position = object.geometry.attributes.position;
       if (position && !object.name.startsWith('wheel-')) object.userData.pristinePositions = new Float32Array(position.array);
@@ -180,6 +208,11 @@ export class ModelLibrary {
       if ('shininess' in object.material) object.material.shininess = 4;
       object.material.specular?.set(0x151515);
       if ('clearcoat' in object.material) object.material.clearcoat = 0;
+      if (this.enhancements.people) {
+        if ('roughness' in object.material) object.material.roughness=.68;
+        object.material.emissive?.set(0x120907);
+        if ('emissiveIntensity' in object.material) object.material.emissiveIntensity=.12;
+      }
       object.material.needsUpdate = true;
     });
     let hips = null;
@@ -202,7 +235,9 @@ export class ModelLibrary {
     const industrial = ['ind:a', 'ind:c', 'ind:f', 'ind:l', 'ind:q', 'ind:t'];
     const commercial = ['com:a', 'com:c', 'com:f', 'com:i', 'com:j', 'com:sky-a', 'com:sky-b', 'com:sky-c'];
     const pool = levelId === 0 || levelId === 2 ? industrial : commercial;
-    return this.cloneAsset(pool[index % pool.length]);
+    const model=this.cloneAsset(pool[index % pool.length]);
+    if(this.enhancements.buildings)model.traverse(object=>{if(!object.isMesh)return;const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>{material.roughness=Math.min(.78,material.roughness??.8);material.metalness=Math.max(.08,material.metalness??0);if('envMapIntensity'in material)material.envMapIntensity=1.35;});});
+    return model;
   }
 
   createDebris(index) {
