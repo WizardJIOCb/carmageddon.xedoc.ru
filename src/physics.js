@@ -151,8 +151,9 @@ export function driveVehicle(vehicle, input, dt) {
   controller.setWheelSteering(3, vehicle.steer);
   controller.updateVehicle(dt, undefined, undefined, collider => collider.handle !== vehicle.collider.handle);
 
-  // Aerodynamic stability: downforce grows with speed without cancelling impacts.
-  const downforce = Math.min(22000, speed * speed * 20);
+  let groundedWheels=0;for(let i=0;i<4;i++)if(controller.wheelIsInContact(i))groundedWheels++;vehicle.groundedWheels=groundedWheels;
+  // Preserve grip on the road while allowing a real jump arc after a ramp.
+  const airborneScale=groundedWheels===0?.08:groundedWheels===1?.25:groundedWheels===2?.55:1,downforce = Math.min(22000, speed * speed * 20)*airborneScale;
   body.applyImpulse({ x: 0, y: -downforce * dt, z: 0 }, true);
   const driftDirection = Math.abs(vehicle.steer) > .035 ? Math.sign(vehicle.steer) : Math.sign(input.steer || 0);
   const yawRate = body.angvel().y;
