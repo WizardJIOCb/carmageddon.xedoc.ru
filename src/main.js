@@ -3,6 +3,7 @@ import './styles.css';
 import { ModelLibrary } from './modelLibrary.js';
 import { MultiplayerClient } from './multiplayer.js';
 import { WreckrunAudio } from './audio.js';
+import { online } from './online.js';
 import {
   RAPIER,
   createPhysicsWorld,
@@ -189,6 +190,8 @@ function showMenu() {
           <button class="nav-btn" data-action="garage">Гараж <small>МАШИНЫ / ОРУЖИЕ</small></button>
           <button class="nav-btn" data-action="quick">Быстрый заезд <small>УРОВЕНЬ ${save.unlockedLevel + 1}</small></button>
           <button class="nav-btn" data-action="multiplayer">Мультиплеер <small>КОМНАТЫ / ДО 12 СЛОТОВ</small></button>
+          <button class="nav-btn" data-action="leaderboards">Рейтинги <small>КАРТЫ / РЕКОРДЫ / БОЕВОЙ СЧЁТ</small></button>
+          <button class="nav-btn" data-action="account">${online.user ? escapeHtml(online.user.username) : 'Войти / регистрация'} <small>${online.user ? 'ПРОФИЛЬ ПОДКЛЮЧЁН' : 'ОНЛАЙН-ПРОФИЛЬ'}</small></button>
           <button class="nav-btn" data-action="settings">Настройки <small>УПРАВЛЕНИЕ / ЗВУК / ГРАФИКА</small></button>
           <button class="nav-btn" data-action="reset">Новая кампания <small>СБРОС</small></button>
         </nav>
@@ -199,11 +202,37 @@ function showMenu() {
   document.querySelector('[data-action="garage"]').onclick = showGarage;
   document.querySelector('[data-action="quick"]').onclick = () => showBriefing(save.unlockedLevel);
   document.querySelector('[data-action="multiplayer"]').onclick = showMultiplayer;
+  document.querySelector('[data-action="leaderboards"]').onclick = showLeaderboards;
+  document.querySelector('[data-action="account"]').onclick = showAccount;
   document.querySelector('[data-action="settings"]').onclick = () => showSettings('controls');
   document.querySelector('[data-action="reset"]').onclick = () => {
     if (confirm('Стереть прогресс кампании и все покупки?')) { save = structuredClone(DEFAULT_SAVE); persist(); showMenu(); }
   };
   menuDemo = createPhysicsMenuDemo(document.querySelector('[data-menu-demo]'));
+}
+
+function showAccount(mode='login', error='') {
+  stopShowroom();
+  if (online.user) {
+    app.innerHTML=`<section class="screen panel-screen account-screen">${topbar('Профиль // <span>онлайн</span>')}<main class="account-wrap"><section class="account-card"><div class="eyebrow">DRIVER ID // ACTIVE</div><h3>${escapeHtml(online.user.username)}</h3><p>Результаты побед автоматически отправляются в глобальные рейтинги. Токен входа хранится только в этом браузере.</p><div class="modal-actions"><button class="action-btn" data-open-ratings>Открыть рейтинги</button><button class="ghost-btn" data-logout>Выйти из профиля</button></div></section></main></section>`;
+    bindBack();document.querySelector('[data-open-ratings]').onclick=showLeaderboards;document.querySelector('[data-logout]').onclick=async()=>{await online.logout();showMenu();};return;
+  }
+  const register=mode==='register';
+  app.innerHTML=`<section class="screen panel-screen account-screen">${topbar(`${register?'Регистрация':'Авторизация'} // <span>driver network</span>`)}<main class="account-wrap"><form class="account-card" data-auth-form><div class="eyebrow">${register?'NEW DRIVER':'IDENTIFY DRIVER'}</div><h3>${register?'Создать профиль':'Войти в профиль'}</h3><label>Имя водителя<input name="username" autocomplete="username" minlength="3" maxlength="20" required placeholder="3–20 символов"></label><label>Пароль<input name="password" type="password" autocomplete="${register?'new-password':'current-password'}" minlength="8" maxlength="128" required placeholder="Минимум 8 символов"></label>${error?`<p class="form-error">${escapeHtml(error)}</p>`:''}<button class="action-btn" type="submit">${register?'Зарегистрироваться':'Войти'}</button><button class="ghost-btn" type="button" data-switch-auth>${register?'Уже есть профиль':'Создать новый профиль'}</button></form></main></section>`;
+  bindBack();document.querySelector('[data-switch-auth]').onclick=()=>showAccount(register?'login':'register');
+  document.querySelector('[data-auth-form]').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;button.textContent='Подключение…';try{await online.authenticate(register?'register':'login',form.get('username'),form.get('password'));localStorage.setItem('wreckrun-player-name',online.user.username);showMenu();}catch(authError){showAccount(mode,authError.message);}};
+}
+
+async function showLeaderboards(metric='score', levelId='all') {
+  stopShowroom();
+  const metrics={score:'Боевой рейтинг',fastest:'Быстрые победы',wins:'Победы',kills:'Убийства',wrecks:'Машины',destructions:'Разрушения',damage:'Урон'};
+  app.innerHTML=`<section class="screen panel-screen leaderboard-screen">${topbar('Рейтинги // <span>global network</span>')}<main class="leaderboard-wrap"><section class="leaderboard-head"><div><div class="eyebrow">WRECK INDUSTRIES // LIVE RECORDS</div><h3>Зал славы</h3></div><div class="leaderboard-filters"><label>Дисциплина<select data-rating-metric>${Object.entries(metrics).map(([id,label])=>`<option value="${id}" ${id===metric?'selected':''}>${label}</option>`).join('')}</select></label><label>Карта<select data-rating-level><option value="all">Все карты</option>${LEVELS.map(level=>`<option value="${level.id}" ${String(level.id)===String(levelId)?'selected':''}>${String(level.id+1).padStart(2,'0')} // ${level.name}</option>`).join('')}</select></label></div></section><section class="leaderboard-table" data-rating-content><p class="rating-loading">Загрузка рейтинга…</p></section>${online.user?'':`<p class="rating-note">Войдите в профиль, чтобы ваши заезды попадали в таблицу.</p>`}</main></section>`;
+  bindBack();const metricSelect=document.querySelector('[data-rating-metric]'),levelSelect=document.querySelector('[data-rating-level]');metricSelect.onchange=()=>showLeaderboards(metricSelect.value,levelSelect.value);levelSelect.onchange=()=>showLeaderboards(metricSelect.value,levelSelect.value);
+  try {
+    const data=await online.leaderboard(metric,levelId),content=document.querySelector('[data-rating-content]');if(!content)return;
+    const value=row=>metric==='fastest'?formatTime(row.fastest):metric==='damage'?money(row.damage):money(row[metric]);
+    content.innerHTML=data.rows.length?`<table><thead><tr><th>#</th><th>Водитель</th><th>${metrics[metric]}</th><th>Победы</th><th>Заезды</th><th>Убийства</th><th>Машины</th><th>Разрушения</th></tr></thead><tbody>${data.rows.map((row,index)=>`<tr class="${row.userId===online.user?.id?'is-current':''}"><td><b>${index+1}</b></td><td><strong>${escapeHtml(row.username)}</strong></td><td><em>${value(row)}</em></td><td>${row.wins}</td><td>${row.attempts}</td><td>${money(row.kills)}</td><td>${money(row.wrecks)}</td><td>${money(row.destructions)}</td></tr>`).join('')}</tbody></table>`:'<p class="rating-loading">На этой карте пока нет результатов. Первый рекорд может быть вашим.</p>';
+  } catch(loadError) { const content=document.querySelector('[data-rating-content]');if(content)content.innerHTML=`<p class="form-error">${escapeHtml(loadError.message)}</p>`; }
 }
 
 async function showMultiplayer(){
@@ -964,6 +993,7 @@ class WreckrunGame {
 
   finish(win,reason){
     if(this.ended)return;this.ended=true;const baseReward=win?this.level.reward+this.kills*45+this.wrecks*250:Math.floor(this.kills*25+this.wrecks*100),reward=baseReward+this.runCredits;save.credits+=reward;if(win){save.unlockedLevel=Math.max(save.unlockedLevel,Math.min(LEVELS.length-1,this.level.id+1));const old=save.best[this.level.id];if(!old||this.elapsed<old)save.best[this.level.id]=this.elapsed;}persist();
+    const destructions=(this.destructibles||[]).filter(item=>item.broken).length,score=Math.round((win?25000:0)+this.kills*350+this.wrecks*1800+destructions*120+this.totalDamage*8+Math.max(0,3600-this.elapsed)*4);online.submitResult({levelId:this.level.id,win,time:this.elapsed,kills:this.kills,wrecks:this.wrecks,destructions,damage:this.totalDamage,score,mode:this.multiplayer?'multiplayer':'campaign'}).catch(error=>showToast(error.message));
     if(this.multiplayer){const modal=document.createElement('div');modal.className='result-modal';modal.innerHTML=`<div class="modal-card" style="border-top-color:${win?'var(--acid)':'var(--hot)'}"><div class="eyebrow">${win?'ЗАЕЗД ЗАВЕРШЁН':'МАШИНА УНИЧТОЖЕНА'}</div><h2>${reason}</h2><p>Результат отправлен серверу. Компания вернётся в лобби, когда завершат все подключённые игроки.</p><div class="result-stats"><div class="result-stat"><strong>${money(Math.round(this.totalDamage))}</strong><small>УРОН</small></div><div class="result-stat"><strong>₡ ${money(reward)}</strong><small>НАГРАДА</small></div><div class="result-stat"><strong data-race-wait>1/${this.multiplayer.room.players.length}</strong><small>ГОТОВЫ</small></div></div><div class="lobby-players" data-race-results></div><p class="lobby-wait">Ожидаем остальных участников…</p><div class="modal-actions"><button class="ghost-btn" data-leave-company>Покинуть компанию</button></div></div>`;this.hud.append(modal);this.raceResultModal=modal;modal.querySelector('[data-leave-company]').onclick=()=>{this.destroy();game=null;showMenu();};this.multiplayer.client.send('race_finished',{result:{win,reason,time:this.elapsed,kills:this.kills,wrecks:this.wrecks,damage:this.totalDamage,reward}});return;}
     const hasNext=win&&this.level.id<LEVELS.length-1,modal=document.createElement('div');modal.className='result-modal';modal.innerHTML=`<div class="modal-card" style="border-top-color:${win?'var(--acid)':'var(--hot)'}"><div class="eyebrow">${win?'ЗАЕЗД ЗАВЕРШЁН':'СИСТЕМА УНИЧТОЖЕНА'}</div><h2>${reason}</h2><p>${win?'Корпорация подтвердила результат. Новый район открыт, награда переведена в гараж.':'Ничего, кроме дымящегося металла. Боевая добыча за нанесённый урон всё равно переведена в гараж.'}</p><div class="result-stats"><div class="result-stat"><strong>${money(Math.round(this.totalDamage))}</strong><small>УРОН</small></div><div class="result-stat"><strong>₡ ${money(this.runCredits)}</strong><small>БОЕВАЯ ДОБЫЧА</small></div><div class="result-stat"><strong>₡ ${money(reward)}</strong><small>ИТОГО</small></div></div><div class="modal-actions"><button class="action-btn" data-next>${hasNext?'Следующий район':'Повторить заезд'}</button><button class="ghost-btn" data-garage>В гараж</button><button class="ghost-btn" data-menu>Главное меню</button></div></div>`;this.hud.append(modal);
     modal.querySelector('[data-next]').onclick=()=>{const id=hasNext?this.level.id+1:this.level.id;this.destroy();showBriefing(id);};modal.querySelector('[data-garage]').onclick=()=>{this.destroy();showGarage();};modal.querySelector('[data-menu]').onclick=()=>{this.destroy();showMenu();};
@@ -1097,4 +1127,4 @@ function angleDelta(a,b){return Math.atan2(Math.sin(b-a),Math.cos(b-a));}
 function formatTime(s){const m=Math.floor(s/60),sec=Math.floor(s%60),ms=Math.floor((s%1)*1000);return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;}
 function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
 
-showMenu();
+online.restore().finally(showMenu);

@@ -1,8 +1,42 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import { AccountStore } from './accountStore.js';
 
 const port = Number(process.env.MULTIPLAYER_PORT || 8081);
-const wss = new WebSocketServer({ port });
+const accounts = new AccountStore();
+await accounts.init();
+const attempts = new Map();
+const json = (response, status, payload) => { response.writeHead(status, { 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store' });response.end(JSON.stringify(payload)); };
+const bearer = request => /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1] || '';
+const readJson = request => new Promise((resolveBody, rejectBody) => { let body='';request.on('data',chunk=>{body+=chunk;if(body.length>32768){rejectBody(new Error('Слишком большой запрос'));request.destroy();}});request.on('end',()=>{try{resolveBody(body?JSON.parse(body):{});}catch{rejectBody(new Error('Некорректный JSON'));}});request.on('error',rejectBody); });
+const rateLimited = request => { const key=String(request.headers['x-forwarded-for']||request.socket.remoteAddress||'unknown').split(',')[0].trim(),now=Date.now(),recent=(attempts.get(key)||[]).filter(time=>now-time<60000);recent.push(now);attempts.set(key,recent);return recent.length>20; };
+const server = createServer(async (request, response) => {
+  const url = new URL(request.url || '/', 'http://localhost');
+  if (!url.pathname.startsWith('/api/')) return json(response, 404, { error:'Не найдено' });
+  try {
+    if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { ok:true });
+    if (request.method === 'GET' && url.pathname === '/api/leaderboards') {
+      const level = url.searchParams.get('levelId');
+      return json(response, 200, accounts.leaderboard(url.searchParams.get('metric'), level === null || level === 'all' ? null : Math.trunc(Number(level)), Number(url.searchParams.get('limit') || 50)));
+    }
+    if (request.method === 'GET' && url.pathname === '/api/auth/me') {
+      const user=accounts.userForToken(bearer(request));return user?json(response,200,{user}):json(response,401,{error:'Требуется вход'});
+    }
+    if (request.method === 'POST' && ['/api/auth/register','/api/auth/login'].includes(url.pathname)) {
+      if(rateLimited(request))return json(response,429,{error:'Слишком много попыток. Подождите минуту.'});
+      const body=await readJson(request),result=url.pathname.endsWith('register')?await accounts.register(body.username,body.password):await accounts.login(body.username,body.password);
+      return json(response,200,result);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/auth/logout') { await accounts.logout(bearer(request));return json(response,200,{ok:true}); }
+    if (request.method === 'POST' && url.pathname === '/api/results') {
+      const user=accounts.userForToken(bearer(request));if(!user)return json(response,401,{error:'Войдите, чтобы попасть в рейтинг'});
+      return json(response,200,{result:await accounts.addResult(user.id,await readJson(request))});
+    }
+    return json(response,404,{error:'Не найдено'});
+  } catch(error) { return json(response,400,{error:error.message||'Ошибка запроса'}); }
+});
+const wss = new WebSocketServer({ server });
 const rooms = new Map();
 const carIds = new Set(['razor','marauder','brutus','mantis','hearse','phantom']);
 const machineGunIds = new Set(['scrapgun','vulcan','shredder']);
@@ -131,4 +165,4 @@ wss.on('connection', socket => {
   socket.on('close', () => leaveRoom(client));
 });
 
-console.log(`WRECKRUN multiplayer server listening on :${port}`);
+server.listen(port, () => console.log(`WRECKRUN game server listening on :${port}`));
