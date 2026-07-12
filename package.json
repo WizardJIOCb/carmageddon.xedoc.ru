@@ -1,15 +1,18 @@
 {
   "name": "wreckrun-aftermath",
-  "version": "0.1.0",
+  "version": "0.2.0-alpha",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "multiplayer": "node server/multiplayer.js",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "three": "^0.178.0"
+    "@dimforge/rapier3d-compat": "^0.19.3",
+    "three": "^0.178.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "vite": "^7.0.4"
